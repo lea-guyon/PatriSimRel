@@ -1466,14 +1466,6 @@ early() {
 			relatives = c(maleRelatives, femaleRelatives, maleRelatives_mothers);
 			for (i in relatives) {
 				pedID = i.pedigreeID;
-				writeFile("bash_Num_replicat/pedigreeID.txt", paste(asString(pedID), village, community.tick), append = T);
-			}
-			
-			sim.treeSeqRememberIndividuals(unique(relatives));
-			
-			relatives = c(maleRelatives, femaleRelatives, maleRelatives_mothers);
-			for (i in relatives) {
-				pedID = i.pedigreeID;
 				writeFile("bash_Num_replicat/pedigreeID_father.txt", paste(asString(pedID), village, community.tick), append = T);
 			}
 			
