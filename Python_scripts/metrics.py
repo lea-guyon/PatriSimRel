@@ -4,7 +4,7 @@ import numpy as np
 def alleles_count(vcf_file, pseudohap = False) :
 
     """
-    Description : Compute the number of alleles 0 and the number of alleles 1 
+    Description : Compute the number of alleles 0 and the number of alleles 1
     for each SNP in a sampled population or village
 
     Arguments : vcf_file = VCF file for a given chromosome, a given replicate and a given generation

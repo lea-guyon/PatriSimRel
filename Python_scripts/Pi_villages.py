@@ -57,16 +57,16 @@ def main():
 
     os.chdir(output)
     output_files = ['Pi_X_mean_by_rep.txt',
-        'Pi_Y_mean_by_rep.txt', 
-        'Pi_A_mean_by_rep.txt', 
+        'Pi_Y_mean_by_rep.txt',
+        'Pi_A_mean_by_rep.txt',
         'Pi_Mito_mean_by_rep.txt'
     ]
     header = ['mf/m', 'Gen', 'Pi', 'Theta', 'tajima_D', 'Nb_SNPs']
     for out_file in output_files:
         write_line(out_file, header)
-    
+
     generations = [0, 20, 40, 60, 80, 100]
-    
+
     for rep in range(1, 101):
         print(rep)
         for gen in generations:
