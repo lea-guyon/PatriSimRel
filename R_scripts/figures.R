@@ -909,6 +909,8 @@ p1 <- ggplot(alltab) +
   stat_pvalue_manual(stat.test,  label = "p.adj.signif", tip.length = 0) +
   theme_bw()
 
+p1
+
 fun_mean <- function(data, indices, gen) {
   d <- data[indices,]
   d <- d[d$Gen == gen,]
@@ -990,82 +992,40 @@ pi_tab <- function(paths, name, scale='local') {
   return(list(pi_tab_Y, pi_tab_Mito))
 }
 
-figure_2_transitions <- function(pi_tab_Y, pi_tab_Mito, legend, xmin, yminY, ymaxY,  yminM, ymaxM, yminMY, ymaxMY, segmentY, textY, segmentM, textM, segmentMY, textMY, col, sh, lt, fontsize1, fontsize2, nCol, legendSpace) {
-  posd <- position_dodge(15)
-  # Build legend
-  ggp_split_1 <- ggplot(pi_tab_Y,                    # Create ggplot2 plot of first subset
-                        aes(Gen,
-                            mean,
-                            color = model,
-                            shape = model,
-                            linetype = model)) +
-    geom_errorbar(aes(ymin = ICinf,  ymax = ICsup), position = posd, linewidth=0.5) +
-    geom_point(size = 2, stroke = 0.75) +
-    scale_color_manual(labels = legend,
-                       values = col) +
-    scale_shape_manual(labels = legend,
-                       values = sh) +
-    scale_linetype_manual(labels = legend,
-                          values = lt) +
-    labs(color = "Scenarios", shape = "Scenarios", linetype = "Scenarios") +
-    theme(legend.key.size = unit(0.5, "cm"),
-          legend.key.height = unit(0.5, "cm"),
-          legend.title = element_text(face = 'bold', size = 9),
-          legend.text = element_text(size=7),
-          legend.spacing.x = unit(2, 'mm')) +
-    guides(color = guide_legend(ncol=nCol, bycol=TRUE))
-  ggp_legend_split_1 <- get_legend(ggp_split_1)
+figure_2_transitions <- function(pi_tab, legend, xmin, ymin, ymax,  segment, text, col, sh, lt, fontsize1, fontsize2, nCol, legendSpace) {
   
-  pi_tab_Y$Gen = pi_tab_Y$Gen + xmin
-  pi_tab_Mito$Gen = pi_tab_Mito$Gen + xmin
+  pi_tab$Gen = pi_tab$Gen + xmin
   
-  p1 <- ggplot(pi_tab_Y, aes(Gen, mean/(2*2.5e-8), shape = model, col= model)) +
+  p1 <- ggplot(pi_tab, aes(Gen, mean, shape = sex, col= sex, linetype = sex)) +
     theme_cowplot() +
     theme(text=element_text(size=fontsize1),
           axis.text = element_text(size=fontsize2),
           panel.grid.major.x = element_blank() ,
           panel.grid.major.y = element_line(color="bisque", linewidth=0.3)) +
-    annotate("rect", xmin = -200, xmax = -100, ymin = yminY, ymax = ymaxY,
+    annotate("rect", xmin = -200, xmax = -100, ymin = ymin, ymax = ymax,
              alpha = .1,fill = "orange") +
-    annotate("rect", xmin = -100, xmax = 0, ymin = yminY, ymax = ymaxY,
+    annotate("rect", xmin = -100, xmax = 0, ymin = ymin, ymax = ymax,
              alpha = .05,fill = "orange") +
-    labs(x= 'Time (generations)', y = 'Male effective population size') +
+    labs(x= 'Time (generations)', y = 'Effective population size',
+        color = "Sex", shape = "Sex", linetype = "Sex") +
     scale_x_continuous(breaks = seq(xmin, 0, 20)) +
-    scale_y_continuous(n.breaks = 6, expand = c(0,0), limits = c(yminY, ymaxY)) +
+    scale_y_continuous(n.breaks = 6, expand = c(0,0), limits = c(ymin, ymax)) +
     scale_color_manual(values = col) +
     scale_shape_manual(values = sh) +
     scale_linetype_manual(values = lt) +
-    geom_line(aes(linetype = model), position = posd, alpha = 0.5) +
-    geom_pointrange(aes(ymin=ICinf/(2*2.5e-8), ymax=ICsup/(2*2.5e-8)), position = posd, size = 0.5, stroke = 0.5, linewidth = 0.3) +
-    annotate("segment", x = xmin, xend = xmin, y = yminY, yend = segmentY, colour = "salmon2", linetype='longdash', linewidth = 0.5) +
-    annotate("text", x = xmin, y = textY, label = bquote(''*t[0]*''), col = 'salmon2', size = 5) +
-    annotate("segment", x = -100, xend = -100, y = yminY, yend = segmentY, colour = "salmon2", linetype='longdash', linewidth=0.5) +
-    annotate("text", x = -100, y = textY, label = bquote(''*t[1]*''), col = 'salmon2', size = 5)
+    annotate("segment", x = xmin, xend = xmin, y = ymin, yend = segment, colour = "salmon2", linetype='longdash', linewidth = 0.5) +
+    annotate("text", x = xmin, y = textY, label = bquote(''*t[0]*''), col = 'salmon2', size = 6) +
+    annotate("segment", x = -100, xend = -100, y = ymin, yend = segment, colour = "salmon2", linetype='longdash', linewidth=0.5) +
+    annotate("text", x = -100, y = textY, label = bquote(''*t[1]*''), col = 'salmon2', size = 6) +
+    geom_line(aes(linetype = sex), alpha = 0.5) +
+    geom_pointrange(aes(ymin=ICinf, ymax=ICsup), size = 0.75, stroke = 0.5, linewidth = 0.5) +
+    theme(legend.key.size = unit(1, "cm"),
+          legend.key.height = unit(1, "cm"),
+          legend.title = element_text(face = 'bold', size = 14),
+          legend.text = element_text(size=12),
+          legend.spacing.x = unit(2, 'mm'))
   
-  p2 <- ggplot(pi_tab_Mito, aes(Gen, mean/(2*5.5e-7), shape = model, col= model)) +
-    theme_cowplot() +
-    theme(text=element_text(size=fontsize1),
-          axis.text = element_text(size=fontsize2),
-          panel.grid.major.x = element_blank() ,
-          panel.grid.major.y = element_line(color="bisque", linewidth=0.3)) +
-    annotate("rect", xmin = -200, xmax = -100, ymin = yminY, ymax = ymaxY,
-             alpha = .1,fill = "orange") +
-    annotate("rect", xmin = -100, xmax = 0, ymin = yminY, ymax = ymaxY,
-             alpha = .05,fill = "orange") +
-    labs(x= 'Time (generations)', y = 'Female effective population size') +
-    scale_x_continuous(breaks = seq(xmin, 0, 20)) +
-    scale_y_continuous(n.breaks = 6, expand = c(0,0), limits = c(yminY, ymaxY)) +
-    scale_color_manual(values = col) +
-    scale_shape_manual(values = sh) +
-    scale_linetype_manual(values = lt) +
-    geom_line(aes(linetype = model), position = posd, alpha = 0.5) +
-    geom_pointrange(aes(ymin=ICinf/(2*5.5e-7), ymax=ICsup/(2*5.5e-7)), position = posd, size = 0.5, stroke = 0.5, linewidth = 0.3) +
-    annotate("segment", x = xmin, xend = xmin, y = yminY, yend = segmentY, colour = "salmon2", linetype='longdash', linewidth = 0.5) +
-    annotate("text", x = xmin, y = textY, label = bquote(''*t[0]*''), col = 'salmon2', size = 5) +
-    annotate("segment", x = -100, xend = -100, y = yminY, yend = segmentY, colour = "salmon2", linetype='longdash', linewidth=0.5) +
-    annotate("text", x = -100, y = textY, label = bquote(''*t[1]*''), col = 'salmon2', size = 5)
-
-  return(list(p1, p2))
+  return(p1)
 }
 
 paths = c("/Tables/Pi/unilineal/extended/r=0/k=0.1/FT=150/Patrilineal_2_patrilocal_relatedness/village")
@@ -1074,19 +1034,11 @@ legend = c("Patrilineal descent, patrilocal residence \n then bilateral descent,
 xmin=-200
 yminY = 0
 ymaxY = 990
-yminM = 640
-ymaxM = 910
-yminMY = 0
-ymaxMY = 30
-segmentY = 880
-textY = 940
-segmentM = 880
-textM = 895
-segmentMY = 26
-textMY = 28
-col = c("#742994")
-sh = c(16)
-lt = c("solid")
+segmentY = 890
+textY = 945
+col = c("#4a14b0", "#097452")
+sh = c(16, 16)
+lt = c("solid", "solid")
 fontsize1 = 11
 fontsize2 = 9
 nCol=1
@@ -1095,24 +1047,21 @@ legendSpace=0.2
 pi_tabs = pi_tab(paths, name, 'local')
 pi_tab_Y = pi_tabs[[1]][[1]]
 pi_tab_M = pi_tabs[[2]][[1]]
-plots = figure_2_transitions(pi_tab_Y, pi_tab_M, legend, xmin, yminY, ymaxY,
-                              yminM, ymaxM, yminMY, ymaxMY, segmentY, textY, segmentM, textM, 
-                              segmentMY, textMY, col, sh, lt, fontsize1, fontsize2, nCol,
-                              legendSpace)
-p2 <- plots[[1]]
-p3 <- plots[[2]]
+pi_tab_Y$sex = rep("male", length(pi_tab_Y$mean))
+pi_tab_M$sex = rep("female", length(pi_tab_M$mean))
+pi_tab_Y$mean = pi_tab_Y$mean/(2*2.5e-8)
+pi_tab_Y$ICinf = pi_tab_Y$ICinf/(2*2.5e-8)
+pi_tab_Y$ICsup = pi_tab_Y$ICsup/(2*2.5e-8)
+pi_tab_M$mean = pi_tab_M$mean/(2*5.5e-7)
+pi_tab_M$ICinf = pi_tab_M$ICinf/(2*5.5e-7)
+pi_tab_M$ICsup = pi_tab_M$ICsup/(2*5.5e-7)
 
-p_temp <- plot_grid(p2 + theme(legend.position = "none"), 
-              p3 + theme(legend.position = "none"), ncol = 2,
-              labels = c("b", "c"))
+pi_tab = merge(pi_tab_Y, pi_tab_M, all=T)
+p2 = figure_2_transitions(pi_tab, legend, xmin,
+                               ymin, ymax, segment, text, 
+                               col, sh, lt, fontsize1, fontsize2, nCol,
+                               legendSpace)
 
-p_temp2 <- plot_grid(NULL, p1, NULL, ncol = 3,
-              rel_widths = c(0.1, 0.8, 0.2))
-
-p <- plot_grid(p_temp2, p_temp, ncol = 1, 
-              labels = c("a", ""))
-
-png(file = "Figures/YM_SP_SP2B.png", width = 3000, height = 2500, res = 300)
-p
+png(file = "Figures/figure_2.png", width = 2000, height = 1500, res = 300)
+p2
 dev.off()
-

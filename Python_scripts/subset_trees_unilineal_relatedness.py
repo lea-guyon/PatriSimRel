@@ -107,7 +107,6 @@ for gen in generations :
 			demography.add_population(name=name, initial_size=int(K/ts_A.num_populations - 1))
 			demography.add_mass_migration(time=gen, source=name, dest="p1", proportion=1)
 		print("Recapitate A!")
-		rateMapA = msprime.RateMap.read_hapmap("/home/leag/Documents/SLiM_model/genetic_map_b37/genetic_map_chr1_b37_100Mbp_recap.txt", sequence_length = 1e8+1, has_header=False, position_col=0, rate_col=1)
 		signal.signal(signal.SIGALRM, handler)
 		signal.alarm(60)
 		try:
@@ -128,7 +127,6 @@ for gen in generations :
 		print("Recapitate X!")
 		signal.signal(signal.SIGALRM, handler)
 		signal.alarm(60)
-		rateMapX = msprime.RateMap.read_hapmap("/home/leag/Documents/SLiM_model/genetic_map_b37/genetic_map_chrX_b37_100Mbp_recap.txt", sequence_length = 1e8, has_header=False, position_col=0, rate_col=1)
 		try:
 			ts_X = pyslim.recapitate(ts_X, recombination_rate = 1e-8, random_seed = seed, demography = demography)
 		except Exception as e: 
@@ -193,11 +191,9 @@ for gen in generations :
 		ind_A = list(set(ind_Y + ind_mito))
 		with open("local/" + str(rep) + "/Sim_A_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
 			mutated_ts_A.write_vcf(vcf_file, contig_id = 'A', individuals = ind_A)
-		
-		indiv_X = [ind.id for ind in indX[village]]
-		print(indiv_X)
+
 		with open("local/" + str(rep) + "/Sim_X_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
-			mutated_ts_X.write_vcf(vcf_file, contig_id = 'X', individuals = indiv_X)
+			mutated_ts_X.write_vcf(vcf_file, contig_id = 'X', individuals = ind_A)
 
 	os.chdir(path_source)
 	os.chdir(str(rep))
@@ -220,9 +216,8 @@ for gen in generations :
 		with open("local_father/" + str(rep) + "/Sim_A_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
 			mutated_ts_A.write_vcf(vcf_file, contig_id = 'A', individuals = ind_A)
 
-		indiv_X = [ind.id for ind in indX[village]]
 		with open("local_father/" + str(rep) + "/Sim_X_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
-			mutated_ts_X.write_vcf(vcf_file, contig_id = 'X', individuals = indiv_X)
+			mutated_ts_X.write_vcf(vcf_file, contig_id = 'X', individuals = ind_A)
 
 	os.chdir(path_source)
 	os.chdir(str(rep))

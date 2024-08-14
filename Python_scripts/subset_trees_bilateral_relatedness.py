@@ -96,14 +96,11 @@ for gen in generations :
 				continue
 			name = pop.metadata['name']
 			demography.add_population(name=name, initial_size=int(K/ts_A.num_populations))
-			#demography.add_population(name=name, initial_size=int(K/(ts_A.num_populations * 2)))
 			demography.add_mass_migration(time=gen, source=name, dest="p1", proportion=1)
 		print("Recapitate A!")
 		signal.signal(signal.SIGALRM, handler)
 		signal.alarm(60)
-		rateMapA = msprime.RateMap.read_hapmap("/home/leag/Documents/SLiM_model/genetic_map_b37/genetic_map_chr1_b37_100Mbp_recap.txt", sequence_length = 1e8+1, has_header=False, position_col=0, rate_col=1)
 		try:
-			#ts_A = pyslim.recapitate(ts_A, recombination_rate = rateMapA, sequence_length = 1e8+1, random_seed = seed, demography = demography, record_provenance=False)
 			ts_A = pyslim.recapitate(ts_A, recombination_rate = 1.1e-8, random_seed = seed, demography = demography)
 		except Exception as e: 
 			print(e)
@@ -119,15 +116,12 @@ for gen in generations :
 				continue
 			name = pop.metadata['name']
 			demography.add_population(name=name, initial_size=int(3*K/(4*ts_X.num_populations)))
-			#demography.add_population(name=name, initial_size=int(3*K/(8*ts_X.num_populations)))
 			demography.add_mass_migration(time=gen, source=name, dest="p1", proportion=1)
 		print("Recapitate X!")
 		signal.signal(signal.SIGALRM, handler)
 		signal.alarm(60)
-		rateMapX = msprime.RateMap.read_hapmap("/home/leag/Documents/SLiM_model/genetic_map_b37/genetic_map_chrX_b37_100Mbp_recap.txt", sequence_length = 1e8, has_header=False, position_col=0, rate_col=1)
 		try:
 			ts_X = pyslim.recapitate(ts_X, recombination_rate = 1e-8, random_seed = seed, demography = demography) 
-			#ts_X = pyslim.recapitate(ts_X, recombination_rate = rateMapX, sequence_length = 1e8, random_seed = seed, demography = demography, record_provenance=False)
 		except Exception as e: 
 			print(e)
 		print("X is recapitated")	
