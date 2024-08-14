@@ -252,6 +252,13 @@ first() {
 	
 	villages = sim.getValue("villages");
 	
+	// set all tags to 0
+	availableInd = sim.subpopulations.individuals[sim.subpopulations.individuals.age <= 2];
+	if (size(availableInd) > 0) {
+		availableFathers = availableInd[availableInd.sex == 'M'];
+		availableFathers.tag = 0;
+	}
+	
 	/// make lists of male and female migrants for each village ///
 	migrantsF = Dictionary();
 	migrantsM = Dictionary();
@@ -294,7 +301,23 @@ first() {
 			sampledGroup = sample(possibleGroup, 1);
 			dest = community.subpopulationsWithIDs(sampledGroup);
 			// migration happens between groups from different villages
-			dest.takeMigrants(sim.individualsWithPedigreeIDs(migrant));
+						maleMigrant = sim.individualsWithPedigreeIDs(migrant);
+			// tag pedigree ID of male migrant in a male from the previous generation from the destination group
+			if (size(dest.individuals[dest.individuals.age == 2]) > 0) {
+				adoptive_father = sample(dest.individuals[dest.individuals.sex == 'M' & dest.individuals.age == 2], 1);
+				// if male already has adoptive son, change male
+				while (adoptive_father.tag > 0) {
+					sampledGroup = sample(possibleGroup, 1);
+					dest = community.subpopulationsWithIDs(sampledGroup);
+					while (size(dest.individuals[dest.individuals.age == 2]) == 0) {
+						sampledGroup = sample(possibleGroup, 1);
+						dest = community.subpopulationsWithIDs(sampledGroup);
+					}
+					adoptive_father = sample(dest.individuals[dest.individuals.sex == 'M' & dest.individuals.age == 2], 1);
+				}
+				adoptive_father.tag = maleMigrant.pedigreeID;
+			}
+			dest.takeMigrants(maleMigrant);
 		}
 	}
 	print("Elapsed (migration) : " + (clock() - start));
@@ -1303,16 +1326,32 @@ early() {
 			firstDegMales = males[firstDegMalesIndex];
 			sons = firstDegMales[firstDegMales.age == 2];
 
+			// adoptive son
+			adoptiveSon = c();
+			if (grandfather.tag > 0) {
+				adoptiveSonID = grandfather.tag;
+				adoptiveSon = sim.individualsWithPedigreeIDs(adoptiveSonID);
+			}
+			sons = c(sons, adoptiveSon);
+
 			// paternal grandsons
 			grandsons = c();
+			adoptiveGrandsons = c();
 			if (size(sons) > 0) {
 				for (son in sons) {
 					relMales = males.relatedness(son);
 					firstDegMalesIndex = which(relMales == 0.5);
 					firstDegMales = males[firstDegMalesIndex];
 					grandsons = c(grandsons, firstDegMales[firstDegMales.age == 1]);
+					// adoptive grandsons
+					if (son.tag > 0) {
+						adoptiveSonID = son.tag;
+						adoptiveSon = sim.individualsWithPedigreeIDs(adoptiveSonID);
+						adoptiveGrandsons = c(adoptiveGrandsons, adoptiveSon);
+					}
 				}
 			}
+			grandsons = c(grandsons, adoptiveGrandsons);
 			
 			// wife
 			couples = sim.getValue("couples");

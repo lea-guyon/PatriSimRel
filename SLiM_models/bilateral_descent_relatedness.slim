@@ -108,7 +108,14 @@ first() {
 	nMigrantsM = asInteger(nIndM * MM_RATIO);  // number of male migrants
 	migrantsF = sample(IndF, nMigrantsF);
 	migrantsM = sample(IndM, nMigrantsM);
-	
+
+	// set all tags to 0
+	availableInd = pops.individuals[pops.individuals.age <= 2];
+	if (size(availableInd) > 0) {
+		availableFathers = availableInd[availableInd.sex == 'M'];
+		availableFathers.tag = 0;
+	}	
+
 	// migration in a new village
 	for (migrant in migrantsF)  {
 		do dest = sample(pops, 1);
@@ -119,6 +126,14 @@ first() {
 		do dest = sample(pops, 1);
 		while (dest == migrant.subpopulation);
 		dest.takeMigrants(migrant);
+		// tag pedigree ID of male migrant in a male from the previous generation from the destination village
+		if (size(dest.individuals[dest.individuals.age == 2]) > 0) {
+			adoptive_father = sample(dest.individuals[dest.individuals.sex == 'M' & dest.individuals.age == 2], 1);
+			while (adoptive_father.tag > 0) {
+				adoptive_father = sample(dest.individuals[dest.individuals.sex == 'M' & dest.individuals.age == 2], 1);
+			}
+			adoptive_father.tag = migrant.pedigreeID;
+		}
 	}
 }
 
@@ -550,17 +565,33 @@ early() {
 			firstDegMalesIndex = which(relMales == 0.5);
 			firstDegMales = males[firstDegMalesIndex];
 			sons = firstDegMales[firstDegMales.age == 2];
+			
+			// adoptive sons
+			adoptiveSon = c();
+			if (grandfather.tag > 0) {
+				adoptiveSonID = grandfather.tag;
+				adoptiveSon = sim.individualsWithPedigreeIDs(adoptiveSonID);
+			}
+			sons = c(sons, adoptiveSon);
 
 			// paternal grandsons
 			grandsons = c();
+			adoptiveGrandsons = c();
 			if (size(sons) > 0) {
 				for (son in sons) {
 					relMales = males.relatedness(son);
 					firstDegMalesIndex = which(relMales == 0.5);
 					firstDegMales = males[firstDegMalesIndex];
 					grandsons = c(grandsons, firstDegMales[firstDegMales.age == 1]);
+					// adoptive grandsons
+					if (son.tag > 0) {
+						adoptiveSonID = son.tag;
+						adoptiveSon = sim.individualsWithPedigreeIDs(adoptiveSonID);
+						adoptiveGrandsons = c(adoptiveGrandsons, adoptiveSon);
+					}
 				}
 			}
+			grandsons = c(grandsons, adoptiveGrandsons);
 			
 			// wife
 			couples_males = sim.getValue("couples_males");
@@ -614,8 +645,6 @@ early() {
 				maleRelatives_mothers_ID = c(maleRelatives_mothers_ID, maleRelatives[male1].pedigreeParentIDs[0]);
 			}
 			maleRelatives_mothers = sim.individualsWithPedigreeIDs(maleRelatives_mothers_ID);
-			print(maleRelatives);
-			print(maleRelatives_mothers);
 			
 			// compute male and female relatedness
 			pairwise_relatednessM = c();
