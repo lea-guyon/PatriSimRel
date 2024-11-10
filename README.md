@@ -1,6 +1,6 @@
 # README
 
-Pipeline simulating human genomes under scenarios with patrilocal residence and different descent systems (bilateral, patrilineal), and computing relatedness coefficients between males and between females, as well as diversity estimators on uniparental genetic markers.
+Pipeline simulating human genomes under scenarios with ambilocal, patrilocal or matrilocal residence and different descent systems (bilateral, patrilineal, matrilineal), and computing relatedness coefficients between males and between females, as well as diversity estimators on uniparental genetic markers.
 
 ## Installation
 `git clone https://github.com/lea-guyon/PatriSimRel`
@@ -105,4 +105,4 @@ In `Python_scripts` folder:
 
 In `R_scripts` folder:
 
--**figures.R**: plots mean relatedness between males and between females and male and female effective sizes for each scenario.
+-**figures.R**: plots mean relatedness between males and between females, Y chromosome and mtDNA haplogroup diversity and male and female effective sizes for each scenario at the end of simulations, as well as p-values of comparisons between scenarios for each estimator. Also plots the change in male and female effective population size for the patrilineal then bilateral descent scenario.
