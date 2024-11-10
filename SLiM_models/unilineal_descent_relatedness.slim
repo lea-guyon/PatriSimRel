@@ -237,7 +237,9 @@ initialize() {
 	sim.setValue('depth', depth);
 	
 	sim.setValue('migrantRatioList', c());
-	
+		
+	sim.setValue("initializeCouples", "true");
+
 	print("Elapsed (split groups + create villages) : " + (clock() - start));
 }
 
@@ -255,8 +257,7 @@ first() {
 	// set all tags to 0
 	availableInd = sim.subpopulations.individuals[sim.subpopulations.individuals.age <= 2];
 	if (size(availableInd) > 0) {
-		availableFathers = availableInd[availableInd.sex == 'M'];
-		availableFathers.tag = 0;
+		availableInd.tag = 0;
 	}
 	
 	/// make lists of male and female migrants for each village ///
@@ -280,7 +281,7 @@ first() {
 	
 	for (key in villages.allKeys) {
 		// migration in a new group from a different village
-		for (migrant in migrantsF.getValue(key))  {
+		for (migrant in migrantsF.getValue(key)) {
 			// sample a village that is different from the migrant's village
 			possibleVillages = setDifference(villages.allKeys, key);
 			sampledVillage = sample(possibleVillages, 1);
@@ -289,7 +290,23 @@ first() {
 			sampledGroup = sample(possibleGroup, 1);
 			dest = community.subpopulationsWithIDs(sampledGroup);
 			// migration happens between groups from different villages
-			dest.takeMigrants(sim.individualsWithPedigreeIDs(migrant));
+			femaleMigrant = sim.individualsWithPedigreeIDs(migrant);
+			// tag pedigree ID of female migrant in a female from the previous generation from the destination group
+			if (size(dest.individuals[dest.individuals.age == 2]) > 0 & DESCENT == "matrilineal") {
+				adoptive_mother = sample(dest.individuals[dest.individuals.sex == 'F' & dest.individuals.age == 2], 1);
+				// if female already has adoptive daughter, change female
+				while (adoptive_mother.tag > 0) {
+					sampledGroup = sample(possibleGroup, 1);
+					dest = community.subpopulationsWithIDs(sampledGroup);
+					while (size(dest.individuals[dest.individuals.age == 2]) == 0) {
+						sampledGroup = sample(possibleGroup, 1);
+						dest = community.subpopulationsWithIDs(sampledGroup);
+					}
+					adoptive_mother = sample(dest.individuals[dest.individuals.sex == 'F' & dest.individuals.age == 2], 1);
+				}
+				adoptive_mother.tag = femaleMigrant.pedigreeID;
+			}
+			dest.takeMigrants(femaleMigrant);
 		}
 		
 		for (migrant in migrantsM.getValue(key))  {
@@ -303,7 +320,7 @@ first() {
 			// migration happens between groups from different villages
 						maleMigrant = sim.individualsWithPedigreeIDs(migrant);
 			// tag pedigree ID of male migrant in a male from the previous generation from the destination group
-			if (size(dest.individuals[dest.individuals.age == 2]) > 0) {
+			if (size(dest.individuals[dest.individuals.age == 2]) > 0 & DESCENT == "patrilineal") {
 				adoptive_father = sample(dest.individuals[dest.individuals.sex == 'M' & dest.individuals.age == 2], 1);
 				// if male already has adoptive son, change male
 				while (adoptive_father.tag > 0) {
@@ -341,6 +358,7 @@ reproduction(NULL, NULL) {
 	villages = sim.getValue("villages");
 	depth = sim.getValue("depth");
 	nExtinctions = sim.getValue("nExtinctions");
+	extinctionPerGroup = 0;
 	
 	// initialize number of couples	
 	nCouples = 0;
@@ -358,8 +376,14 @@ reproduction(NULL, NULL) {
 	// initialize list of failed children
 	failedChildren = c();
 	
-	// initialize list of couples
-	couples = c();
+	initializeCouples = sim.getValue("initializeCouples");
+	if (initializeCouples == "true") {
+		// initialize list of couples
+		couples = c();
+	}
+	else {
+		couples = sim.getValue("couples");
+	}
 	
 	// initialize custom ID arrays for males and females
 	if (RF == F) {
@@ -505,6 +529,7 @@ reproduction(NULL, NULL) {
 			// update number of extinctions
 			nExtinctions = nExtinctions + nExt;
 			sim.setValue("nExtinctions", nExtinctions);
+			extinctionPerGroup = extinctionPerGroup + nExt;
 			
 			// update villages
 			villages.setValue(key, groupCurrentGen); // update key in villages
@@ -582,6 +607,14 @@ reproduction(NULL, NULL) {
 				// increment lists of mothers and fathers
 				fat = unique(c(fat, father));
 				mot = unique(c(mot, mother));
+		
+				// add tagF
+				if (child.sex == 'F') {
+					child.tagF = mother.tagF;
+				}
+				else {
+					child.tagF = trunc(father.tagF) + mother.tagF - trunc(mother.tagF);
+				}
 				
 				// matrices of IDs
 				if (RF == F) {
@@ -592,10 +625,10 @@ reproduction(NULL, NULL) {
 						// if mother is a migrant, give the ID of another individual in the group
 						counter = 0;
 						while (size(ID_village_mother) == 0) {
-							mother = mother.subpopulation.sampleIndividuals(1, sex = 'F', maxAge = 1);
-							ID_village_mother = ID_village[which(ID_village[,0] == asString(mother.pedigreeID)),];
+							newMother = mother.subpopulation.sampleIndividuals(1, sex = 'F', maxAge = 1);
+							ID_village_mother = ID_village[which(ID_village[,0] == asString(newMother.pedigreeID)),];
 							counter = counter + 1;
-							if (counter > size(mother.subpopulation.individuals[mother.subpopulation.individuals.sex == 'F' & mother.subpopulation.individuals.age == 1]) -1) {
+							if (counter > size(mother.subpopulation.individuals[mother.subpopulation.individuals.sex == 'F']) -1) {
 								newMotherID = sample(ID_village[,0], 1);
 								ID_village_mother = ID_village[which(ID_village[,0] == newMotherID),];
 							}
@@ -608,7 +641,6 @@ reproduction(NULL, NULL) {
 						// the son inherits the custom ID of his father + supplementary number corresponding to the number of the child in the family
 						ID_village_father = ID_village[which(ID_village[,0] == father_ID),];
 						// if father is a migrant, give the ID of another individual in the group
-						
 						counter = 0;
 						while (size(ID_village_father) == 0) {
 							newFather = father.subpopulation.sampleIndividuals(1, sex = 'M', maxAge = 1);
@@ -636,6 +668,8 @@ reproduction(NULL, NULL) {
 			// update number of extinctions
 			nExtinctions = nExtinctions + nExt;
 			sim.setValue("nExtinctions", nExtinctions);
+			
+			extinctionPerGroup = extinctionPerGroup + nExt;
 			
 			// update villages
 			villages.setValue(key, reproGroup);
@@ -717,6 +751,7 @@ reproduction(NULL, NULL) {
 	sim.setValue("villages", villages);
 	sim.setValue("K_village", K_village);
 	sim.setValue("growthRate", growthRate);
+	sim.setValue("extinctionPerGroup", extinctionPerGroup);
 }
 
 early() {
@@ -733,6 +768,11 @@ early() {
 	if (!isNULL(adults)) {
 		sim.killIndividuals(adults);
 	}
+	sim.setValue("initializeCouples", "true");
+}
+
+20016 early() {
+	sim.setValue("initializeCouples", "false");
 }
 
 20021:20036 early() {
@@ -741,6 +781,11 @@ early() {
 	if (!isNULL(adults)) {
 		sim.killIndividuals(adults);
 	}
+	sim.setValue("initializeCouples", "true");
+}
+
+20036 early() {
+	sim.setValue("initializeCouples", "false");
 }
 
 20041:20056 early() {
@@ -749,6 +794,11 @@ early() {
 	if (!isNULL(adults)) {
 		sim.killIndividuals(adults);
 	}
+	sim.setValue("initializeCouples", "true");
+}
+
+20056 early() {
+	sim.setValue("initializeCouples", "false");
 }
 
 20061:20076 early() {
@@ -757,6 +807,11 @@ early() {
 	if (!isNULL(adults)) {
 		sim.killIndividuals(adults);
 	}
+	sim.setValue("initializeCouples", "true");
+}
+
+20076 early() {
+	sim.setValue("initializeCouples", "false");
 }
 
 20081:20096 early() {
@@ -765,6 +820,11 @@ early() {
 	if (!isNULL(adults)) {
 		sim.killIndividuals(adults);
 	}
+	sim.setValue("initializeCouples", "true");
+}
+
+20096 early() {
+	sim.setValue("initializeCouples", "false");
 }
 
 20001:20100 early() {
@@ -781,11 +841,16 @@ early() {
 		groupDepth = c();
 		pairwiseDepth = c();
 	}
+	nGroups = size(sim.subpopulations[sim.subpopulations.individualCount > 0]);
 	growthRate = sim.getValue("growthRate");
+	nGrowingGroups = size(which(growthRate > 1));
 	depth = sim.getValue("depth");
 	migrantRatioList = sim.getValue('migrantRatioList');
 	K_village = sim.getValue('K_village');
 	fissionTime = c();
+	fissionPerGroup = 0;
+	extinctionPerGroup = sim.getValue("extinctionPerGroup");
+	allGroupDepth = c();
 	
 	// unfriendly fission : list splitting groups and their village of origin
 	splittingGroups = c();
@@ -803,11 +868,52 @@ early() {
 			inds = subpop.individuals[subpop.individuals.age == 0];
 			nInds = size(inds);
 			nMales = size(inds[inds.sex == 'M']); // nb of males in the descent group
+
+			if (DESCENT == 'patrilineal') {
+				ind = inds[inds.sex == 'M'];
+				oppositSexInd = inds[inds.sex == 'F'];
+			}
+			else if (DESCENT == 'matrilineal') {
+				ind = inds[inds.sex == 'F'];
+				oppositSexInd = inds[inds.sex == 'M'];
+			}
+			
+			// compute depth of all groups //
+			lastCommonAncestor = sim.getValue('lastCommonAncestor');
+			// new ID matrix for individuals of the group
+			new_ID = NULL;
+			// reduce the number of values in ID vector : keep only generations where there are different ancestors
+			for (id in ind.pedigreeID) {
+				ID_village_individual = ID_village[which(ID_village[,0] == id),];
+				new_ID = rbind(new_ID, ID_village[which(ID_village[,0] == id),]);
+			}
+			
+			// find last common ancestor for the group
+			idx = lastCommonAncestor.getValue(asString(subpop.id));
+
+			if (!isNULL(new_ID)){
+				ancestors = unique(new_ID[,idx]);
+				nAncestors = size(ancestors);
+				
+				while (nAncestors == 1 & idx <= size(new_ID[0,])-1) {
+					ancestors = unique(new_ID[,idx]);
+					nAncestors = size(ancestors);
+					idx = idx + 1;
+					if (nAncestors > 1) {
+						idx = idx - 1;
+					}
+				}
+				// update group depth
+				allGroupDepth = c(allGroupDepth, size(new_ID[0,]) - idx);
+				// update lastCommonAncestor
+				lastCommonAncestor.setValue(asString(subpop.id), idx);
+			}
 			
 			// fission event if the size of the descent group is above FITH and if the last fission event is older than 3 generations
 			if (nInds >= FITH & depth.getValue(asString(subpop.id)) > 3) {
 				print("Fission !");
 				nFissions = nFissions + 1;
+				fissionPerGroup = fissionPerGroup + 1;
 				
 				// update depth and counter
 				fissionTime = c(fissionTime, depth.getValue(asString(subpop.id)));
@@ -828,15 +934,6 @@ early() {
 					growthRate = c(growthRate, newGrowthRate);
 				}
 				
-				if (DESCENT == 'patrilineal') {
-					ind = inds[inds.sex == 'M'];
-					oppositSexInd = inds[inds.sex == 'F'];
-				}
-				else if (DESCENT == 'matrilineal') {
-					ind = inds[inds.sex == 'F'];
-					oppositSexInd = inds[inds.sex == 'M'];
-				}
-				
 				/// lineal fission ///
 				if (RF == F) {
 					lastCommonAncestor = sim.getValue('lastCommonAncestor');
@@ -853,7 +950,7 @@ early() {
 					idx = lastCommonAncestor.getValue(asString(subpop.id));
 					ancestors = unique(new_ID[,idx]);
 					nAncestors = size(ancestors);
-					while (nAncestors == 1 & idx <= size(new_ID[0,])) {
+					while (nAncestors == 1 & idx <= size(new_ID[0,])-1) {
 						ancestors = unique(new_ID[,idx]);
 						nAncestors = size(ancestors);
 						idx = idx + 1;
@@ -968,6 +1065,7 @@ early() {
 				print('Extinction!');
 				
 				nExtinctions = nExtinctions + 1;
+				extinctionPerGroup = extinctionPerGroup + 1;
 				
 				// include remaining females in another group if necessary
 				remainingInds = subpop.individuals[subpop.individuals.age == 0];
@@ -1105,10 +1203,12 @@ early() {
 	sim.setValue("growthRate", growthRate);
 	sim.setValue('migrantRatioList', migrantRatioList);
 	sim.setValue('nFissions', nFissions);
+	sim.setValue('fissionPerGroup', fissionPerGroup/nGrowingGroups);
 	sim.setValue("nExtinctions", nExtinctions);
+	sim.setValue('extinctionPerGroup', extinctionPerGroup/nGrowingGroups);
 	if (RF == F) {
 		sim.setValue("groupDepth", groupDepth);
-		//sim.setValue("pairwiseDepth", pairwiseDepth);
+		sim.setValue("allGroupDepth", allGroupDepth);
 	}
 	sim.setValue("fissionTime", fissionTime);
 	print("Elapsed (Fissions/Extinctions) : " + (clock() - start));
@@ -1126,8 +1226,14 @@ early() {
 		// Nb of fissions (cumulated)
 		nFissions = sim.getValue("nFissions");
 		
+		// Fissions per group
+		fissionPerGroup = sim.getValue("fissionPerGroup");
+		
 		// Nb of extinctions (cumulated)
 		nExtinctions = sim.getValue("nExtinctions");
+		
+		// Exinctions per group
+		extinctionPerGroup = sim.getValue("extinctionPerGroup");
 		
 		mothers = sim.getValue("mothers");
 		fathers =  sim.getValue("fathers");
@@ -1169,6 +1275,16 @@ early() {
 					writeFile(paste0(output, "groupDepth.txt"), line, append = T);
 				}
 			}
+			
+			allGroupDepth = sim.getValue("allGroupDepth");
+			if (!isNULL(allGroupDepth)) {
+				meanAllDepth = mean(allGroupDepth);
+				varAllDepth = var(allGroupDepth);
+				for (d in allGroupDepth){
+					line = paste("bash_Num_replicat", community.tick, d);
+					writeFile(paste0(output, "allGroupDepth.txt"), line, append = T);
+				}
+			}
 		}
 		else {
 			meanDepth = NAN;
@@ -1185,7 +1301,7 @@ early() {
 			varRatioMigrants = var(migrantRatioList);
 		}
 		
-		line = paste("bash_Num_replicat", community.tick, nIndTotal, nFissions, nExtinctions, nGroups, fathers, indPerGroup, varIndPerGroup, femalePerGroup, mothers, failedCouples, singleInd, meanNbChild, varNbChild, meanDepth, varDepth, meanRatioMigrants, varRatioMigrants, meanFissionTime, varFissionTime);
+		line = paste("bash_Num_replicat", community.tick, nIndTotal, nFissions, fissionPerGroup, nExtinctions, extinctionPerGroup, nGroups, fathers, indPerGroup, varIndPerGroup, femalePerGroup, mothers, failedCouples, singleInd, meanNbChild, varNbChild, meanDepth, varDepth, meanRatioMigrants, varRatioMigrants, meanFissionTime, varFissionTime);
 		writeFile(paste0(output, "metrics.txt"), line, append = T);
 	}
 }
@@ -1258,6 +1374,37 @@ early() {
 				sampleRelFreqM, sampleRelFreqF, sampleMeanRelM, sampleMeanRelF, sampleRelFirstM, sampleRelFirstF);
 			writeFile(paste0(output, "relatedness.txt"), line, append = T);
 			
+			// haplogroup frequency
+			Y_haplogroups = c();
+			M_haplogroups = c();
+			for (male in sampled_males) {
+				Y_haplogroups = c(Y_haplogroups, asString(trunc(male.tagF)));
+				M_haplogroups = c(M_haplogroups, asString(male.tagF - trunc(male.tagF)));
+			}
+			for (female in sampled_females) {
+				M_haplogroups = c(M_haplogroups, asString(female.tagF - trunc(female.tagF)));
+			}
+			unique_Y_hg = unique(Y_haplogroups);
+			unique_M_hg = unique(M_haplogroups);
+			Y_hg_freq = sapply(unique_Y_hg, "size(which(Y_haplogroups == applyValue))/size(Y_haplogroups);");
+			M_hg_freq = sapply(unique_M_hg, "size(which(M_haplogroups == applyValue))/size(M_haplogroups);");
+			for (i in seq(0, size(unique_Y_hg)-1)) {
+				chr = "Y";
+				hg = unique_Y_hg[i];
+				freq = Y_hg_freq[i];
+				nInd = size(Y_haplogroups);
+				line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+				writeFile(paste0(output, "hg_freq_village.txt"), line, append = T);
+			}
+			for (i in seq(0, size(unique_M_hg)-1)) {
+				chr = "M";
+				hg = unique_M_hg[i];
+				freq = M_hg_freq[i];
+				nInd = size(M_haplogroups);
+				line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+				writeFile(paste0(output, "hg_freq_village.txt"), line, append = T);
+			}
+			
 			relatives = c(sampled_males, sampled_females, sampled_males_mothers);
 			for (i in relatives) {
 				pedID = i.pedigreeID;
@@ -1266,249 +1413,775 @@ early() {
 			
 			sim.treeSeqRememberIndividuals(relatives);
 			
-			// if females are burried with their father
-			females = sim.subpopulations.individuals[sim.subpopulations.individuals.sex == "F"];
-			femaleRelatives = c();
-			pairwise_relatednessF = c();
-			allmales = groups.individuals[groups.individuals.sex == 'M' & groups.individuals.age > 0];
-			for (male1 in allmales[allmales.age > 1]) {
-				// daughters
-				relFemales = females.relatedness(male1);
-				firstDegFemalesIndex = which(relFemales == 0.5);
-				firstDegFemales = females[firstDegFemalesIndex];
-				femaleRelatives = c(femaleRelatives, firstDegFemales[firstDegFemales.age == male1.age - 1]);
+			if (DESCENT == "patrilineal") {
+				// if females are burried with their father
+				females = sim.subpopulations.individuals[sim.subpopulations.individuals.sex == "F"];
+				femaleRelatives = c();
+				pairwise_relatednessF = c();
+				allmales = groups.individuals[groups.individuals.sex == 'M' & groups.individuals.age > 0];
+				for (male1 in allmales[allmales.age > 1]) {
+					// daughters
+					relFemales = females.relatedness(male1);
+					firstDegFemalesIndex = which(relFemales == 0.5);
+					firstDegFemales = females[firstDegFemalesIndex];
+					femaleRelatives = c(femaleRelatives, firstDegFemales[firstDegFemales.age == male1.age - 1]);
+				}
+				femaleRelatives = unique(femaleRelatives);
+				
+				for (female1 in seq(0, size(femaleRelatives)-2)) {
+					other_females = femaleRelatives[(female1 + 1): (size(femaleRelatives) - 1)];
+					rel = femaleRelatives[female1].relatedness(other_females);
+					pairwise_relatednessF = c(pairwise_relatednessF, rel);
+				}
+				// frequency of 1st, 2nd and 3rd degree relatedness
+				relFreqF = size(pairwise_relatednessF[pairwise_relatednessF > 0])/size(pairwise_relatednessF);
+				
+				// frequency of 1st degree relatedness
+				relFirstF = size(pairwise_relatednessF[pairwise_relatednessF == 0.5])/size(pairwise_relatednessF);
+				
+				// mean relatedness
+				meanRelF = mean(pairwise_relatednessF);
+				
+				line = paste("bash_Num_replicat", community.tick, relFreqM, relFreqF, meanRelM, meanRelF, relFirstM, relFirstF);
+				writeFile(paste0(output, "relatedness_father.txt"), line, append = T);
+				
+				sampled_males = sample(males, 10);
+				sampled_females = sample(femaleRelatives, 10);
+				
+				sampled_males_mothers_ID = c();
+				for (male1 in seq(0, size(sampled_males)-1)) {
+					sampled_males_mothers_ID = c(sampled_males_mothers_ID, sampled_males[male1].pedigreeParentIDs[0]);
+				}
+				sampled_males_mothers = sim.individualsWithPedigreeIDs(sampled_males_mothers_ID);
+				
+				relatives = c(sampled_males, sampled_females, sampled_males_mothers);
+				for (i in relatives) {
+					pedID = i.pedigreeID;
+					writeFile("bash_Num_replicat/pedigreeID_village_father.txt", paste(asString(pedID), village, community.tick), append = T);
 			}
-			femaleRelatives = unique(femaleRelatives);
-			
-			for (female1 in seq(0, size(femaleRelatives)-2)) {
-				other_females = femaleRelatives[(female1 + 1): (size(femaleRelatives) - 1)];
-				rel = femaleRelatives[female1].relatedness(other_females);
-				pairwise_relatednessF = c(pairwise_relatednessF, rel);
+				
+				// haplogroup frequency
+				Y_haplogroups = c();
+				M_haplogroups = c();
+				for (male in sampled_males) {
+					Y_haplogroups = c(Y_haplogroups, asString(trunc(male.tagF)));
+					M_haplogroups = c(M_haplogroups, asString(male.tagF - trunc(male.tagF)));
+				}
+				for (female in sampled_females) {
+					M_haplogroups = c(M_haplogroups, asString(female.tagF - trunc(female.tagF)));
+				}
+				unique_Y_hg = unique(Y_haplogroups);
+				unique_M_hg = unique(M_haplogroups);
+				Y_hg_freq = sapply(unique_Y_hg, "size(which(Y_haplogroups == applyValue))/size(Y_haplogroups);");
+				M_hg_freq = sapply(unique_M_hg, "size(which(M_haplogroups == applyValue))/size(M_haplogroups);");
+				for (i in seq(0, size(unique_Y_hg)-1)) {
+					chr = "Y";
+					hg = unique_Y_hg[i];
+					freq = Y_hg_freq[i];
+					nInd = size(Y_haplogroups);
+					line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+					writeFile(paste0(output, "hg_freq_village_father.txt"), line, append = T);
+				}
+				for (i in seq(0, size(unique_M_hg)-1)) {
+					chr = "M";
+					hg = unique_M_hg[i];
+					freq = M_hg_freq[i];
+					nInd = size(M_haplogroups);
+					line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+					writeFile(paste0(output, "hg_freq_village_father.txt"), line, append = T);
+				}
 			}
 			
-			// frequency of 1st, 2nd and 3rd degree relatedness
-			relFreqF = size(pairwise_relatednessF[pairwise_relatednessF > 0])/size(pairwise_relatednessF);
-			
-			// frequency of 1st degree relatedness
-			relFirstF = size(pairwise_relatednessF[pairwise_relatednessF == 0.5])/size(pairwise_relatednessF);
-			
-			// mean relatedness
-			meanRelF = mean(pairwise_relatednessF);
-			
-			line = paste("bash_Num_replicat", community.tick, relFreqM, relFreqF, meanRelM, meanRelF, relFirstM, relFirstF);
-			writeFile(paste0(output, "relatedness_father.txt"), line, append = T);
-			
-			sampled_males = sample(males, 10);
-			sampled_females = sample(femaleRelatives, 10);
-			
-			sampled_males_mothers_ID = c();
-			for (male1 in seq(0, size(sampled_males)-1)) {
-				sampled_males_mothers_ID = c(sampled_males_mothers_ID, sampled_males[male1].pedigreeParentIDs[0]);
-			}
-			sampled_males_mothers = sim.individualsWithPedigreeIDs(sampled_males_mothers_ID);
-			
-			relatives = c(sampled_males, sampled_females, sampled_males_mothers);
-			for (i in relatives) {
-				pedID = i.pedigreeID;
-				writeFile("bash_Num_replicat/pedigreeID_village_father.txt", paste(asString(pedID), village, community.tick), append = T);
-			}
-			
-			sim.treeSeqRememberIndividuals(relatives);
-			
-			// local group //
-			females = groups.individuals[groups.individuals.sex == 'F' & groups.individuals.age > 0 & groups.individuals.age < 4];
-			// sample a male
-			grandfather = sample(males[males.age == 3], 1);
-
-			// sons
-			relMales = males.relatedness(grandfather);
-			firstDegMalesIndex = which(relMales == 0.5);
-			firstDegMales = males[firstDegMalesIndex];
-			sons = firstDegMales[firstDegMales.age == 2];
-
-			// adoptive son
-			adoptiveSon = c();
-			if (grandfather.tag > 0) {
-				adoptiveSonID = grandfather.tag;
-				adoptiveSon = sim.individualsWithPedigreeIDs(adoptiveSonID);
-			}
-			sons = c(sons, adoptiveSon);
-
-			// paternal grandsons
-			grandsons = c();
-			adoptiveGrandsons = c();
-			if (size(sons) > 0) {
-				for (son in sons) {
-					relMales = males.relatedness(son);
+			else if (DESCENT == "matrilineal") {
+				// males are burried with their mother
+				males = sim.subpopulations.individuals[sim.subpopulations.individuals.sex == "M"];
+				maleRelatives = c();
+				pairwise_relatednessM = c();
+				allfemales = groups.individuals[groups.individuals.sex == 'F' & groups.individuals.age > 0];
+				for (female1 in allfemales[allfemales.age > 1]) {
+					// sons
+					relMales = males.relatedness(female1);
 					firstDegMalesIndex = which(relMales == 0.5);
 					firstDegMales = males[firstDegMalesIndex];
-					grandsons = c(grandsons, firstDegMales[firstDegMales.age == 1]);
-					// adoptive grandsons
-					if (son.tag > 0) {
-						adoptiveSonID = son.tag;
-						adoptiveSon = sim.individualsWithPedigreeIDs(adoptiveSonID);
-						adoptiveGrandsons = c(adoptiveGrandsons, adoptiveSon);
-					}
+					maleRelatives = c(maleRelatives, firstDegMales[firstDegMales.age == female1.age - 1]);
 				}
-			}
-			grandsons = c(grandsons, adoptiveGrandsons);
-			
-			// wife
-			couples = sim.getValue("couples");
-			index = match(grandfather.pedigreeID, asInteger(couples[,3]));
-			if (index == -1) {
-				print("no wife because of unbalanced sex ratio");
-				wife = c();
-			}
-			else {
-				wife = sim.individualsWithPedigreeIDs(asInteger(couples[index, 4]));
-			}
-			
-			// sons' wives
-			sons_wives = c();
-			if (size(sons) > 0) {
-				for (son in sons) {
-					index = match(son.pedigreeID, asInteger(couples[,3]));
-					if (index == -1) {
-						print("no wife because of unbalanced sex ratio");
-					}
-					else {
-						sons_wives = c(sons_wives, sim.individualsWithPedigreeIDs(asInteger(couples[index, 4])));
-					}
-				}
-			}
-
-			// grandsons' wives
-			grandsons_wives = c();
-			if (size(grandsons) > 0) {
-				for (grandson in grandsons) {
-					index = match(grandson.pedigreeID, asInteger(couples[,3]));
-					if (index == -1) {
-						print("no wife because of unbalanced sex ratio");
-					}
-					else {
-						grandsons_wives = c(grandsons_wives, sim.individualsWithPedigreeIDs(asInteger(couples[index, 4])));
-					}
-				}
-			}
-
-			// if females are burried with their husband
-			femaleRelatives = unique(c(wife, sons_wives, grandsons_wives));
-			
-			// all related males
-			maleRelatives = unique(c(grandfather, sons, grandsons));
-			
-			// males' mothers
-			maleRelatives_mothers_ID = c();
-			for (male1 in seq(0, size(maleRelatives)-1)) {
-				maleRelatives_mothers_ID = c(maleRelatives_mothers_ID, maleRelatives[male1].pedigreeParentIDs[0]);
-			}
-			maleRelatives_mothers = sim.individualsWithPedigreeIDs(maleRelatives_mothers_ID);
-			print(maleRelatives);
-			print(maleRelatives_mothers);
-			
-			// compute male and female relatedness
-			pairwise_relatednessM = c();
-			pairwise_relatednessF = c();
-			
-			if (size(maleRelatives) > 1) {
+				maleRelatives = unique(maleRelatives);
+				
 				for (male1 in seq(0, size(maleRelatives)-2)) {
 					other_males = maleRelatives[(male1 + 1): (size(maleRelatives) - 1)];
 					rel = maleRelatives[male1].relatedness(other_males);
 					pairwise_relatednessM = c(pairwise_relatednessM, rel);
 				}
-			}
-			else {
-				pairwise_relatednessM = c(0);
+				// frequency of 1st, 2nd and 3rd degree relatedness
+				relFreqM = size(pairwise_relatednessM[pairwise_relatednessM > 0])/size(pairwise_relatednessM);
+				
+				// frequency of 1st degree relatedness
+				relFirstM = size(pairwise_relatednessM[pairwise_relatednessM == 0.5])/size(pairwise_relatednessM);
+				
+				// mean relatedness
+				meanRelM = mean(pairwise_relatednessM);
+				
+				line = paste("bash_Num_replicat", community.tick, relFreqM, relFreqF, meanRelM, meanRelF, relFirstM, relFirstF);
+				writeFile(paste0(output, "relatedness_mother.txt"), line, append = T);
+				
+				sampled_males = sample(maleRelatives, 10);
+				sampled_females = sample(females, 10);
+				
+				sampled_males_mothers_ID = c();
+				for (male1 in seq(0, size(sampled_males)-1)) {
+					sampled_males_mothers_ID = c(sampled_males_mothers_ID, sampled_males[male1].pedigreeParentIDs[0]);
+				}
+				sampled_males_mothers = sim.individualsWithPedigreeIDs(sampled_males_mothers_ID);
+				
+				relatives = c(sampled_males, sampled_females, sampled_males_mothers);
+				for (i in relatives) {
+					pedID = i.pedigreeID;
+					writeFile("bash_Num_replicat/pedigreeID_village_mother.txt", paste(asString(pedID), village, community.tick), append = T);
+				}
+				
+				// haplogroup frequency
+				Y_haplogroups = c();
+				M_haplogroups = c();
+				for (male in sampled_males) {
+					Y_haplogroups = c(Y_haplogroups, asString(trunc(male.tagF)));
+					M_haplogroups = c(M_haplogroups, asString(male.tagF - trunc(male.tagF)));
+				}
+				for (female in sampled_females) {
+					M_haplogroups = c(M_haplogroups, asString(female.tagF - trunc(female.tagF)));
+				}
+				unique_Y_hg = unique(Y_haplogroups);
+				unique_M_hg = unique(M_haplogroups);
+				Y_hg_freq = sapply(unique_Y_hg, "size(which(Y_haplogroups == applyValue))/size(Y_haplogroups);");
+				M_hg_freq = sapply(unique_M_hg, "size(which(M_haplogroups == applyValue))/size(M_haplogroups);");
+				for (i in seq(0, size(unique_Y_hg)-1)) {
+					chr = "Y";
+					hg = unique_Y_hg[i];
+					freq = Y_hg_freq[i];
+					nInd = size(Y_haplogroups);
+					line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+					writeFile(paste0(output, "hg_freq_village_mother.txt"), line, append = T);
+				}
+				for (i in seq(0, size(unique_M_hg)-1)) {
+					chr = "M";
+					hg = unique_M_hg[i];
+					freq = M_hg_freq[i];
+					nInd = size(M_haplogroups);
+					line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+					writeFile(paste0(output, "hg_freq_village_mother.txt"), line, append = T);
+				}
 			}
 			
-			if (size(femaleRelatives) > 1) {
+			sim.treeSeqRememberIndividuals(relatives);
+			
+			// local group //
+if (DESCENT == "patrilineal") {
+				females = groups.individuals[groups.individuals.sex == 'F' & groups.individuals.age > 0 & groups.individuals.age < 4];
+				maleRelatives = c();
+				femaleRelatives = c();
+				while (size(maleRelatives) < 2 | size(femaleRelatives) < 2) {
+					// sample a male
+					grandfather = sample(males[males.age == 3], 1);
+					
+					// sons
+					relMales = males.relatedness(grandfather);
+					firstDegMalesIndex = which(relMales == 0.5);
+					firstDegMales = males[firstDegMalesIndex];
+					sons = firstDegMales[firstDegMales.age == 2];
+					
+					// adoptive son
+					adoptiveSon = c();
+					if (grandfather.tag > 0) {
+						adoptiveSonID = grandfather.tag;
+						adoptiveSon = sim.individualsWithPedigreeIDs(adoptiveSonID);
+					}
+					sons = c(sons, adoptiveSon);
+					
+					// paternal grandsons
+					grandsons = c();
+					adoptiveGrandsons = c();
+					if (size(sons) > 0) {
+						for (son in sons) {
+							relMales = males.relatedness(son);
+							firstDegMalesIndex = which(relMales == 0.5);
+							firstDegMales = males[firstDegMalesIndex];
+							grandsons = c(grandsons, firstDegMales[firstDegMales.age == 1]);
+							// adoptive grandsons
+							if (son.tag > 0) {
+								adoptiveSonID = son.tag;
+								adoptiveSon = sim.individualsWithPedigreeIDs(adoptiveSonID);
+								adoptiveGrandsons = c(adoptiveGrandsons, adoptiveSon);
+							}
+						}
+					}
+					grandsons = c(grandsons, adoptiveGrandsons);
+					
+					couples = sim.getValue("couples");
+					// wife
+					wife = c();
+					index = match(grandfather.pedigreeID, asInteger(couples[,3]));
+					if (index == -1) {
+						print("no wife because of unbalanced sex ratio");
+					}
+					else {
+						wife = sim.individualsWithPedigreeIDs(asInteger(couples[index, 4]));
+					}
+					
+					// sons' wives
+					sons_wives = c();
+					if (size(sons) > 0) {
+						for (son in sons) {
+							index = match(son.pedigreeID, asInteger(couples[,3]));
+							if (index == -1) {
+								print("no wife because of unbalanced sex ratio");
+							}
+							else {
+								sons_wives = c(sons_wives, sim.individualsWithPedigreeIDs(asInteger(couples[index, 4])));
+							}
+						}
+					}
+					
+					// grandsons' wives
+					grandsons_wives = c();
+					if (size(grandsons) > 0) {
+						for (grandson in grandsons) {
+							index = match(grandson.pedigreeID, asInteger(couples[,3]));
+							if (index == -1) {
+								print("no wife because of unbalanced sex ratio");
+							}
+							else {
+								grandsons_wives = c(grandsons_wives, sim.individualsWithPedigreeIDs(asInteger(couples[index, 4])));
+							}
+						}
+					}
+					
+					// if females are burried with their husband
+					femaleRelatives = unique(c(wife, sons_wives, grandsons_wives));
+					
+					// all related males
+					maleRelatives = unique(c(grandfather, sons, grandsons));
+				}
+				
+				// males' mothers
+				maleRelatives_mothers_ID = c();
+				for (male1 in seq(0, size(maleRelatives)-1)) {
+					maleRelatives_mothers_ID = c(maleRelatives_mothers_ID, maleRelatives[male1].pedigreeParentIDs[0]);
+				}
+				maleRelatives_mothers = sim.individualsWithPedigreeIDs(maleRelatives_mothers_ID);
+				
+				// compute male and female relatedness
+				pairwise_relatednessM = c();
+				pairwise_relatednessF = c();
+				
+				for (male1 in seq(0, size(maleRelatives)-2)) {
+					other_males = maleRelatives[(male1 + 1): (size(maleRelatives) - 1)];
+					rel = maleRelatives[male1].relatedness(other_males);
+					pairwise_relatednessM = c(pairwise_relatednessM, rel);
+				}
+				
 				for (female1 in seq(0, size(femaleRelatives)-2)) {
 					other_females = femaleRelatives[(female1 + 1): (size(femaleRelatives) - 1)];
 					rel = femaleRelatives[female1].relatedness(other_females);
 					pairwise_relatednessF = c(pairwise_relatednessF, rel);
 				}
-			}
-			else {
-				pairwise_relatednessF = c(0);
-			}
-			
-			// frequency of 1st, 2nd and 3rd degree relatedness
-			relFreqM = size(pairwise_relatednessM[pairwise_relatednessM > 0])/size(pairwise_relatednessM);
-			relFreqF = size(pairwise_relatednessF[pairwise_relatednessF > 0])/size(pairwise_relatednessF);
-			
-			// frequency of 1st degree relatedness
-			relFirstM = size(pairwise_relatednessM[pairwise_relatednessM == 0.5])/size(pairwise_relatednessM);
-			relFirstF = size(pairwise_relatednessF[pairwise_relatednessF == 0.5])/size(pairwise_relatednessF);
-			
-			// mean relatedness
-			meanRelM = mean(pairwise_relatednessM);
-			meanRelF = mean(pairwise_relatednessF);
-			
-			line = paste("bash_Num_replicat", community.tick, relFreqM, relFreqF, meanRelM, meanRelF, relFirstM, relFirstF, size(c(maleRelatives, femaleRelatives)));
-			writeFile(paste0(output, "relatedness_patriline.txt"), line, append = T);
-			
-			relatives = c(maleRelatives, femaleRelatives, maleRelatives_mothers);
-			for (i in relatives) {
-				pedID = i.pedigreeID;
-				writeFile("bash_Num_replicat/pedigreeID.txt", paste(asString(pedID), village, community.tick), append = T);
-			}
-			
-			sim.treeSeqRememberIndividuals(relatives);
-			
-			/////// if females are burried with their father ////////
-			females = sim.subpopulations.individuals[sim.subpopulations.individuals.sex == "F"];
-			femaleRelatives = c();
-			pairwise_relatednessF = c();
-			// daughters
-			relFemales = females.relatedness(grandfather);
-			firstDegFemalesIndex = which(relFemales == 0.5);
-			firstDegFemales = females[firstDegFemalesIndex];
-			daughters = firstDegFemales[firstDegFemales.age == 2];
-			
-			// paternal granddaughters
-			granddaughters = c();
-			if (size(daughters) > 0) {
-				for (son in sons) {
-					relFemales = females.relatedness(son);
+				
+				// frequency of 1st, 2nd and 3rd degree relatedness
+				relFreqM = size(pairwise_relatednessM[pairwise_relatednessM > 0])/size(pairwise_relatednessM);
+				relFreqF = size(pairwise_relatednessF[pairwise_relatednessF > 0])/size(pairwise_relatednessF);
+				
+				// frequency of 1st degree relatedness
+				relFirstM = size(pairwise_relatednessM[pairwise_relatednessM == 0.5])/size(pairwise_relatednessM);
+				relFirstF = size(pairwise_relatednessF[pairwise_relatednessF == 0.5])/size(pairwise_relatednessF);
+				
+				// mean relatedness
+				meanRelM = mean(pairwise_relatednessM);
+				meanRelF = mean(pairwise_relatednessF);
+				
+				line = paste("bash_Num_replicat", community.tick, relFreqM, relFreqF, meanRelM, meanRelF, relFirstM, relFirstF, size(c(maleRelatives, femaleRelatives)));
+				writeFile(paste0(output, "relatedness_patriline.txt"), line, append = T);
+				
+				relatives = c(maleRelatives, femaleRelatives, maleRelatives_mothers);
+				for (i in relatives) {
+					pedID = i.pedigreeID;
+					writeFile("bash_Num_replicat/pedigreeID.txt", paste(asString(pedID), village, community.tick), append = T);
+				}
+				
+				sim.treeSeqRememberIndividuals(relatives);
+				
+				// haplogroup frequency
+				Y_haplogroups = c();
+				M_haplogroups = c();
+				for (male in maleRelatives) {
+					Y_haplogroups = c(Y_haplogroups, asString(trunc(male.tagF)));
+					M_haplogroups = c(M_haplogroups, asString(male.tagF - trunc(male.tagF)));
+				}
+				for (female in femaleRelatives) {
+					M_haplogroups = c(M_haplogroups, asString(female.tagF - trunc(female.tagF)));
+				}
+				unique_Y_hg = unique(Y_haplogroups);
+				unique_M_hg = unique(M_haplogroups);
+				Y_hg_freq = sapply(unique_Y_hg, "size(which(Y_haplogroups == applyValue))/size(Y_haplogroups);");
+				M_hg_freq = sapply(unique_M_hg, "size(which(M_haplogroups == applyValue))/size(M_haplogroups);");
+				for (i in seq(0, size(unique_Y_hg)-1)) {
+					chr = "Y";
+					hg = unique_Y_hg[i];
+					freq = Y_hg_freq[i];
+					nInd = size(Y_haplogroups);
+					line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+					writeFile(paste0(output, "hg_freq_patriline.txt"), line, append = T);
+				}
+				for (i in seq(0, size(unique_M_hg)-1)) {
+					chr = "M";
+					hg = unique_M_hg[i];
+					freq = M_hg_freq[i];
+					nInd = size(M_haplogroups);
+					line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+					writeFile(paste0(output, "hg_freq_patriline.txt"), line, append = T);
+				}
+				
+				/////// if females are burried with their father ////////
+				females = sim.subpopulations.individuals[sim.subpopulations.individuals.sex == "F"];
+				
+				maleRelatives = c();
+				femaleRelatives = c();
+				
+				while (size(maleRelatives) < 2 | size(femaleRelatives) < 2) {
+					// sample a male
+					grandfather = sample(males[males.age == 3], 1);
+					
+					// sons
+					relMales = males.relatedness(grandfather);
+					firstDegMalesIndex = which(relMales == 0.5);
+					firstDegMales = males[firstDegMalesIndex];
+					sons = firstDegMales[firstDegMales.age == 2];
+					
+					// adoptive son
+					adoptiveSon = c();
+					if (grandfather.tag > 0) {
+						adoptiveSonID = grandfather.tag;
+						adoptiveSon = sim.individualsWithPedigreeIDs(adoptiveSonID);
+					}
+					sons = c(sons, adoptiveSon);
+					
+					// paternal grandsons
+					grandsons = c();
+					adoptiveGrandsons = c();
+					if (size(sons) > 0) {
+						for (son in sons) {
+							relMales = males.relatedness(son);
+							firstDegMalesIndex = which(relMales == 0.5);
+							firstDegMales = males[firstDegMalesIndex];
+							grandsons = c(grandsons, firstDegMales[firstDegMales.age == 1]);
+							// adoptive grandsons
+							if (son.tag > 0) {
+								adoptiveSonID = son.tag;
+								adoptiveSon = sim.individualsWithPedigreeIDs(adoptiveSonID);
+								adoptiveGrandsons = c(adoptiveGrandsons, adoptiveSon);
+							}
+						}
+					}
+					grandsons = c(grandsons, adoptiveGrandsons);
+					
+					// daughters
+					relFemales = females.relatedness(grandfather);
 					firstDegFemalesIndex = which(relFemales == 0.5);
 					firstDegFemales = females[firstDegFemalesIndex];
-					granddaughters = c(granddaughters, firstDegFemales[firstDegFemales.age == 1]);
+					daughters = firstDegFemales[firstDegFemales.age == 2];
+					
+					// paternal granddaughters
+					granddaughters = c();
+					if (size(sons) > 0) {
+						for (son in sons) {
+							relFemales = females.relatedness(son);
+							firstDegFemalesIndex = which(relFemales == 0.5);
+							firstDegFemales = females[firstDegFemalesIndex];
+							granddaughters = c(granddaughters, firstDegFemales[firstDegFemales.age == 1]);
+						}
+					}
+					
+					femaleRelatives = unique(c(daughters, granddaughters));
+					
+					// all related males
+					maleRelatives = unique(c(grandfather, sons, grandsons));
 				}
-			}
-
-			femaleRelatives = unique(c(daughters, granddaughters));
-			
-			if (size(femaleRelatives) > 1) {
+				
+				// males' mothers
+				maleRelatives_mothers_ID = c();
+				for (male1 in seq(0, size(maleRelatives)-1)) {
+					maleRelatives_mothers_ID = c(maleRelatives_mothers_ID, maleRelatives[male1].pedigreeParentIDs[0]);
+				}
+				maleRelatives_mothers = sim.individualsWithPedigreeIDs(maleRelatives_mothers_ID);
+				
+				// compute male and female relatedness
+				pairwise_relatednessM = c();
+				pairwise_relatednessF = c();
+				
+				for (male1 in seq(0, size(maleRelatives)-2)) {
+					other_males = maleRelatives[(male1 + 1): (size(maleRelatives) - 1)];
+					rel = maleRelatives[male1].relatedness(other_males);
+					pairwise_relatednessM = c(pairwise_relatednessM, rel);
+				}
+				
 				for (female1 in seq(0, size(femaleRelatives)-2)) {
 					other_females = femaleRelatives[(female1 + 1): (size(femaleRelatives) - 1)];
 					rel = femaleRelatives[female1].relatedness(other_females);
 					pairwise_relatednessF = c(pairwise_relatednessF, rel);
 				}
+				
+				// frequency of 1st, 2nd and 3rd degree relatedness
+				relFreqM = size(pairwise_relatednessM[pairwise_relatednessM > 0])/size(pairwise_relatednessM);
+				relFreqF = size(pairwise_relatednessF[pairwise_relatednessF > 0])/size(pairwise_relatednessF);
+				
+				// frequency of 1st degree relatedness
+				relFirstM = size(pairwise_relatednessM[pairwise_relatednessM == 0.5])/size(pairwise_relatednessM);
+				relFirstF = size(pairwise_relatednessF[pairwise_relatednessF == 0.5])/size(pairwise_relatednessF);
+				
+				// mean relatedness
+				meanRelM = mean(pairwise_relatednessM);
+				meanRelF = mean(pairwise_relatednessF);
+				
+				line = paste("bash_Num_replicat", community.tick, relFreqM, relFreqF, meanRelM, meanRelF, relFirstM, relFirstF, size(c(maleRelatives, femaleRelatives)));
+				writeFile(paste0(output, "relatedness_patriline_father.txt"), line, append = T);
+				
+				relatives = c(maleRelatives, femaleRelatives, maleRelatives_mothers);
+				for (i in relatives) {
+					pedID = i.pedigreeID;
+					writeFile("bash_Num_replicat/pedigreeID_father.txt", paste(asString(pedID), village, community.tick), append = T);
+				}
+				
+				sim.treeSeqRememberIndividuals(relatives);
+				
+				// haplogroup frequency
+				Y_haplogroups = c();
+				M_haplogroups = c();
+				for (male in maleRelatives) {
+					Y_haplogroups = c(Y_haplogroups, asString(trunc(male.tagF)));
+					M_haplogroups = c(M_haplogroups, asString(male.tagF - trunc(male.tagF)));
+				}
+				for (female in femaleRelatives) {
+					M_haplogroups = c(M_haplogroups, asString(female.tagF - trunc(female.tagF)));
+				}
+				unique_Y_hg = unique(Y_haplogroups);
+				unique_M_hg = unique(M_haplogroups);
+				Y_hg_freq = sapply(unique_Y_hg, "size(which(Y_haplogroups == applyValue))/size(Y_haplogroups);");
+				M_hg_freq = sapply(unique_M_hg, "size(which(M_haplogroups == applyValue))/size(M_haplogroups);");
+				for (i in seq(0, size(unique_Y_hg)-1)) {
+					chr = "Y";
+					hg = unique_Y_hg[i];
+					freq = Y_hg_freq[i];
+					nInd = size(Y_haplogroups);
+					line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+					writeFile(paste0(output, "hg_freq_patriline_father.txt"), line, append = T);
+				}
+				for (i in seq(0, size(unique_M_hg)-1)) {
+					chr = "M";
+					hg = unique_M_hg[i];
+					freq = M_hg_freq[i];
+					nInd = size(M_haplogroups);
+					line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+					writeFile(paste0(output, "hg_freq_patriline_father.txt"), line, append = T);
+				}
 			}
-			else {
-				pairwise_relatednessF = c(0);
+			
+			else if (DESCENT == "matrilineal") {
+				maleRelatives = c();
+				femaleRelatives = c();
+				
+				// if males are buried with their mother
+				males = sim.subpopulations.individuals[sim.subpopulations.individuals.sex == 'M'];
+				while (size(femaleRelatives) < 2 | size(maleRelatives) < 2) {
+					// sample a female
+					grandmother = sample(females[females.age == 3], 1);
+					
+					// daughters
+					relFemales = females.relatedness(grandmother);
+					firstDegFemalesIndex = which(relFemales == 0.5);
+					firstDegFemales = females[firstDegFemalesIndex];
+					daughters = firstDegFemales[firstDegFemales.age == 2];
+					
+					// adoptive daughter
+					adoptiveDaughter = c();
+					if (grandmother.tag > 0) {
+						adoptiveDaughterID = grandmother.tag;
+						adoptiveDaughter = sim.individualsWithPedigreeIDs(adoptiveDaughterID);
+					}
+					daughters = c(daughters, adoptiveDaughter);
+					
+					// maternal granddaughters
+					granddaughters = c();
+					adoptiveGranddaughters = c();
+					if (size(daughters) > 0) {
+						for (daughter in daughters) {
+							relFemales = females.relatedness(daughter);
+							firstDegFemalesIndex = which(relFemales == 0.5);
+							firstDegFemales = females[firstDegFemalesIndex];
+							granddaughters = c(granddaughters, firstDegFemales[firstDegFemales.age == 1]);
+							// adoptive granddaughters
+							if (daughter.tag > 0) {
+								adoptiveDaughterID = daughter.tag;
+								adoptiveDaughter = sim.individualsWithPedigreeIDs(adoptiveDaughterID);
+								adoptiveGranddaughters = c(adoptiveGranddaughters, adoptiveDaughter);
+							}
+						}
+					}
+					granddaughters = c(granddaughters, adoptiveGranddaughters);
+					
+					// all related females
+					femaleRelatives = unique(c(grandmother, daughters, granddaughters));
+					
+					/////// if males are burried with their mother ////////			
+					// sons
+					relMales = males.relatedness(grandmother);
+					firstDegMalesIndex = which(relMales == 0.5);
+					firstDegMales = males[firstDegMalesIndex];
+					sons = firstDegMales[firstDegMales.age == 2];
+					
+					// maternal grandsons
+					grandsons = c();
+					if (size(daughters) > 0) {
+						for (daughter in daughters) {
+							relMales = males.relatedness(daughter);
+							firstDegMalesIndex = which(relMales == 0.5);
+							firstDegMales = males[firstDegMalesIndex];
+							grandsons = c(grandsons, firstDegMales[firstDegMales.age == 1]);
+						}
+					}
+					maleRelatives = unique(c(sons, grandsons));
+				}
+				
+				pairwise_relatednessM = c();
+				pairwise_relatednessF = c();
+				
+				for (male1 in seq(0, size(maleRelatives)-2)) {
+					other_males = maleRelatives[(male1 + 1): (size(maleRelatives) - 1)];
+					rel = maleRelatives[male1].relatedness(other_males);
+					pairwise_relatednessM = c(pairwise_relatednessM, rel);
+				}
+				
+				for (female1 in seq(0, size(femaleRelatives)-2)) {
+					other_females = femaleRelatives[(female1 + 1): (size(femaleRelatives) - 1)];
+					rel = femaleRelatives[female1].relatedness(other_females);
+					pairwise_relatednessF = c(pairwise_relatednessF, rel);
+				}
+				
+				// frequency of 1st, 2nd and 3rd degree relatedness
+				relFreqM = size(pairwise_relatednessM[pairwise_relatednessM > 0])/size(pairwise_relatednessM);
+				relFreqF = size(pairwise_relatednessF[pairwise_relatednessF > 0])/size(pairwise_relatednessF);
+				
+				// frequency of 1st degree relatedness
+				relFirstM = size(pairwise_relatednessM[pairwise_relatednessM == 0.5])/size(pairwise_relatednessM);
+				relFirstF = size(pairwise_relatednessF[pairwise_relatednessF == 0.5])/size(pairwise_relatednessF);
+				
+				// mean relatedness
+				meanRelM = mean(pairwise_relatednessM);
+				meanRelF = mean(pairwise_relatednessF);
+				
+				line = paste("bash_Num_replicat", community.tick, relFreqM, relFreqF, meanRelM, meanRelF, relFirstM, relFirstF, size(c(maleRelatives, femaleRelatives)));
+				writeFile(paste0(output, "relatedness_matriline_mother.txt"), line, append = T);
+				
+				// males' mothers
+				maleRelatives_mothers_ID = c();
+				for (male1 in seq(0, size(maleRelatives)-1)) {
+					maleRelatives_mothers_ID = c(maleRelatives_mothers_ID, maleRelatives[male1].pedigreeParentIDs[0]);
+				}
+				maleRelatives_mothers = sim.individualsWithPedigreeIDs(maleRelatives_mothers_ID);
+				
+				relatives = c(maleRelatives, femaleRelatives, maleRelatives_mothers);
+				for (i in relatives) {
+					pedID = i.pedigreeID;
+					writeFile("bash_Num_replicat/pedigreeID_mother.txt", paste(asString(pedID), village, community.tick), append = T);
+				}
+				
+				sim.treeSeqRememberIndividuals(relatives);
+				
+				// haplogroup frequency
+				Y_haplogroups = c();
+				M_haplogroups = c();
+				for (male in maleRelatives) {
+					Y_haplogroups = c(Y_haplogroups, asString(trunc(male.tagF)));
+					M_haplogroups = c(M_haplogroups, asString(male.tagF - trunc(male.tagF)));
+				}
+				for (female in femaleRelatives) {
+					M_haplogroups = c(M_haplogroups, asString(female.tagF - trunc(female.tagF)));
+				}
+				unique_Y_hg = unique(Y_haplogroups);
+				unique_M_hg = unique(M_haplogroups);
+				Y_hg_freq = sapply(unique_Y_hg, "size(which(Y_haplogroups == applyValue))/size(Y_haplogroups);");
+				M_hg_freq = sapply(unique_M_hg, "size(which(M_haplogroups == applyValue))/size(M_haplogroups);");
+				for (i in seq(0, size(unique_Y_hg)-1)) {
+					chr = "Y";
+					hg = unique_Y_hg[i];
+					freq = Y_hg_freq[i];
+					nInd = size(Y_haplogroups);
+					line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+					writeFile(paste0(output, "hg_freq_matriline_mother.txt"), line, append = T);
+				}
+				for (i in seq(0, size(unique_M_hg)-1)) {
+					chr = "M";
+					hg = unique_M_hg[i];
+					freq = M_hg_freq[i];
+					nInd = size(M_haplogroups);
+					line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+					writeFile(paste0(output, "hg_freq_matriline_mother.txt"), line, append = T);
+				}
+				
+				/////// if males are burried with their wife ////////
+				femaleRelatives = c();
+				maleRelatives = c();
+				while (size(femaleRelatives) < 2 | size(maleRelatives) < 2) {
+					// sample a female
+					grandmother = sample(females[females.age == 3], 1);
+					
+					// daughters
+					relFemales = females.relatedness(grandmother);
+					firstDegFemalesIndex = which(relFemales == 0.5);
+					firstDegFemales = females[firstDegFemalesIndex];
+					daughters = firstDegFemales[firstDegFemales.age == 2];
+					
+					// adoptive daughter
+					adoptiveDaughter = c();
+					if (grandmother.tag > 0) {
+						adoptiveDaughterID = grandmother.tag;
+						adoptiveDaughter = sim.individualsWithPedigreeIDs(adoptiveDaughterID);
+					}
+					daughters = c(daughters, adoptiveDaughter);
+					
+					// maternal granddaughters
+					granddaughters = c();
+					adoptiveGranddaughters = c();
+					if (size(daughters) > 0) {
+						for (daughter in daughters) {
+							relFemales = females.relatedness(daughter);
+							firstDegFemalesIndex = which(relFemales == 0.5);
+							firstDegFemales = females[firstDegFemalesIndex];
+							granddaughters = c(granddaughters, firstDegFemales[firstDegFemales.age == 1]);
+							// adoptive granddaughters
+							if (daughter.tag > 0) {
+								adoptiveDaughterID = daughter.tag;
+								adoptiveDaughter = sim.individualsWithPedigreeIDs(adoptiveDaughterID);
+								adoptiveGranddaughters = c(adoptiveGranddaughters, adoptiveDaughter);
+							}
+						}
+					}
+					granddaughters = c(granddaughters, adoptiveGranddaughters);
+					
+					// all related females
+					femaleRelatives = unique(c(grandmother, daughters, granddaughters));
+					
+					couples = sim.getValue("couples");
+					// husband
+					husband = c();
+					index = match(grandmother.pedigreeID, asInteger(couples[,4]));
+					if (index == -1) {
+						print("no husband because of unbalanced sex ratio");
+					}
+					else {
+						husband = sim.individualsWithPedigreeIDs(asInteger(couples[index, 3]));
+					}
+					
+					// daughters' husbands
+					daughters_husbands = c();
+					if (size(daughters) > 0) {
+						for (daughter in daughters) {
+							index = match(daughter.pedigreeID, asInteger(couples[,4]));
+							if (index == -1) {
+								print("no husband because of unbalanced sex ratio");
+							}
+							else {
+								daughters_husbands = c(daughters_husbands, sim.individualsWithPedigreeIDs(asInteger(couples[index, 3])));
+							}
+						}
+					}
+					
+					// granddaughters' husbands
+					granddaughters_husbands = c();
+					if (size(granddaughters) > 0) {
+						for (granddaughter in granddaughters) {
+							index = match(granddaughter.pedigreeID, asInteger(couples[,4]));
+							if (index == -1) {
+								print("no husband because of unbalanced sex ratio");
+							}
+							else {
+								granddaughters_husbands = c(granddaughters_husbands, sim.individualsWithPedigreeIDs(asInteger(couples[index, 3])));
+							}
+						}
+					}
+					maleRelatives = unique(c(husband, daughters_husbands, granddaughters_husbands));
+				}
+				
+				// males' mothers
+				maleRelatives_mothers_ID = c();
+				for (male1 in seq(0, size(maleRelatives)-1)) {
+					maleRelatives_mothers_ID = c(maleRelatives_mothers_ID, maleRelatives[male1].pedigreeParentIDs[0]);
+				}
+				maleRelatives_mothers = sim.individualsWithPedigreeIDs(maleRelatives_mothers_ID);
+				
+				pairwise_relatednessF = c();
+				pairwise_relatednessM = c();
+				
+				for (male1 in seq(0, size(maleRelatives)-2)) {
+					other_males = maleRelatives[(male1 + 1): (size(maleRelatives) - 1)];
+					rel = maleRelatives[male1].relatedness(other_males);
+					pairwise_relatednessM = c(pairwise_relatednessM, rel);
+				}
+				
+				for (female1 in seq(0, size(femaleRelatives)-2)) {
+					other_females = femaleRelatives[(female1 + 1): (size(femaleRelatives) - 1)];
+					rel = femaleRelatives[female1].relatedness(other_females);
+					pairwise_relatednessF = c(pairwise_relatednessF, rel);
+				}
+				
+				// frequency of 1st, 2nd and 3rd degree relatedness
+				relFreqM = size(pairwise_relatednessM[pairwise_relatednessM > 0])/size(pairwise_relatednessM);
+				relFreqF = size(pairwise_relatednessF[pairwise_relatednessF > 0])/size(pairwise_relatednessF);
+				
+				// frequency of 1st degree relatedness
+				relFirstM = size(pairwise_relatednessM[pairwise_relatednessM == 0.5])/size(pairwise_relatednessM);
+				relFirstF = size(pairwise_relatednessF[pairwise_relatednessF == 0.5])/size(pairwise_relatednessF);
+				
+				// mean relatedness
+				meanRelM = mean(pairwise_relatednessM);
+				meanRelF = mean(pairwise_relatednessF);
+				
+				line = paste("bash_Num_replicat", community.tick, relFreqM, relFreqF, meanRelM, meanRelF, relFirstM, relFirstF, size(c(maleRelatives, femaleRelatives)));
+				writeFile(paste0(output, "relatedness_matriline.txt"), line, append = T);
+				
+				relatives = c(maleRelatives, femaleRelatives, maleRelatives_mothers);
+				for (i in relatives) {
+					pedID = i.pedigreeID;
+					writeFile("bash_Num_replicat/pedigreeID.txt", paste(asString(pedID), village, community.tick), append = T);
+				}
+				
+				// haplogroup frequency
+				Y_haplogroups = c();
+				M_haplogroups = c();
+				for (male in maleRelatives) {
+					Y_haplogroups = c(Y_haplogroups, asString(trunc(male.tagF)));
+					M_haplogroups = c(M_haplogroups, asString(male.tagF - trunc(male.tagF)));
+				}
+				for (female in femaleRelatives) {
+					M_haplogroups = c(M_haplogroups, asString(female.tagF - trunc(female.tagF)));
+				}
+				unique_Y_hg = unique(Y_haplogroups);
+				unique_M_hg = unique(M_haplogroups);
+				Y_hg_freq = sapply(unique_Y_hg, "size(which(Y_haplogroups == applyValue))/size(Y_haplogroups);");
+				M_hg_freq = sapply(unique_M_hg, "size(which(M_haplogroups == applyValue))/size(M_haplogroups);");
+				for (i in seq(0, size(unique_Y_hg)-1)) {
+					chr = "Y";
+					hg = unique_Y_hg[i];
+					freq = Y_hg_freq[i];
+					nInd = size(Y_haplogroups);
+					line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+					writeFile(paste0(output, "hg_freq_matriline.txt"), line, append = T);
+				}
+				for (i in seq(0, size(unique_M_hg)-1)) {
+					chr = "M";
+					hg = unique_M_hg[i];
+					freq = M_hg_freq[i];
+					nInd = size(M_haplogroups);
+					line = paste("bash_Num_replicat", community.tick, village, chr, nInd, hg, freq);
+					writeFile(paste0(output, "hg_freq_matriline.txt"), line, append = T);
+				}
 			}
-			
-			// frequency of 1st, 2nd and 3rd degree relatedness
-			relFreqF = size(pairwise_relatednessF[pairwise_relatednessF > 0])/size(pairwise_relatednessF);
-			
-			// frequency of 1st degree relatedness
-			relFirstF = size(pairwise_relatednessF[pairwise_relatednessF == 0.5])/size(pairwise_relatednessF);
-			
-			// mean relatedness
-			meanRelF = mean(pairwise_relatednessF);
-			
-			line = paste("bash_Num_replicat", community.tick, relFreqM, relFreqF, meanRelM, meanRelF, relFirstM, relFirstF, size(c(maleRelatives, femaleRelatives)));
-			writeFile(paste0(output, "relatedness_patriline_father.txt"), line, append = T);
-			
-			relatives = c(maleRelatives, femaleRelatives, maleRelatives_mothers);
-			for (i in relatives) {
-				pedID = i.pedigreeID;
-				writeFile("bash_Num_replicat/pedigreeID_father.txt", paste(asString(pedID), village, community.tick), append = T);
-			}
-			
-			sim.treeSeqRememberIndividuals(relatives);
 
 			for (group in groups) {
 				pairwise_group_relatednessM = c();
@@ -1516,7 +2189,7 @@ early() {
 				pairwise_group_relatednessM_sampled = c();
 				pairwise_group_relatednessF_sampled = c();
 				males = group.individuals[group.individuals.sex == 'M' & group.individuals.age > 0];
-				females = groups.individuals[groups.individuals.sex == 'F' & groups.individuals.age > 0];
+				females = group.individuals[group.individuals.sex == 'F' & group.individuals.age > 0];
 				if (size(males) > 1 & size(females) > 1) {
 					for (male1 in seq(0, size(males)-2)) {
 						other_males = males[(male1 + 1): (size(males) - 1)];

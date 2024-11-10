@@ -99,7 +99,7 @@ for gen in generations :
 			demography.add_mass_migration(time=gen, source=name, dest="p1", proportion=1)
 		print("Recapitate A!")
 		signal.signal(signal.SIGALRM, handler)
-		signal.alarm(60)
+		signal.alarm(120)
 		try:
 			ts_A = pyslim.recapitate(ts_A, recombination_rate = 1.1e-8, random_seed = seed, demography = demography)
 		except Exception as e: 
@@ -119,7 +119,7 @@ for gen in generations :
 			demography.add_mass_migration(time=gen, source=name, dest="p1", proportion=1)
 		print("Recapitate X!")
 		signal.signal(signal.SIGALRM, handler)
-		signal.alarm(60)
+		signal.alarm(120)
 		try:
 			ts_X = pyslim.recapitate(ts_X, recombination_rate = 1e-8, random_seed = seed, demography = demography) 
 		except Exception as e: 

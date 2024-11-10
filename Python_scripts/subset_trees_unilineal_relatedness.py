@@ -144,13 +144,22 @@ for gen in generations :
 		pedID = {}
 		for line in pedID_file:
 			l = line.split()
-			if str(l[2][3:]) == str(gen) or str(l[2][2:]) == str(gen):
-				ID = int(l[0])
-				vil = l[1][1]
-				if vil not in pedID:
-					pedID[vil] = [ID]
-				else:
-					pedID[vil].append(ID)
+			if gen == 0:
+				if str(l[2][2:]) == "000":
+					ID = int(l[0])
+					vil = l[1][1]
+					if vil not in pedID:
+						pedID[vil] = [ID]
+					else:
+						pedID[vil].append(ID)
+			else:
+				if str(l[2][3:]) == str(gen) or str(l[2][2:]) == str(gen):
+					ID = int(l[0])
+					vil = l[1][1]
+					if vil not in pedID:
+						pedID[vil] = [ID]
+					else:
+						pedID[vil].append(ID)
 
 		indM, indF, indX = {}, {}, {}
 		for vil in pedID:
@@ -169,55 +178,6 @@ for gen in generations :
 				if ind.metadata['pedigree_id'] in pedID[vil] :
 					indX[vil].append(ind)
 		return(indM, indF, indX)
-
-	pedID_file = open("pedigreeID.txt", "r")
-	indM, indF, indX = get_ind(pedID_file)
-	print(indM)
-
-	###### Output VCF files ######
-	os.chdir(output)
-	for village in indM :
-		ind_Y = [ind.id for ind in indM[village]]
-		print(ind_Y)
-		with open("local/" + str(rep) + "/Sim_Y_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
-			mutated_ts_Y.write_vcf(vcf_file, contig_id = 'Y', individuals = ind_Y)
-
-		ind_mito = [ind.id for ind in indF[village]]
-		print(ind_mito)
-		if len(ind_mito) > 1:
-			with open("local/" + str(rep) + "/Sim_Mito_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
-				mutated_ts_mito.write_vcf(vcf_file, contig_id = 'Mito', individuals = ind_mito)
-
-		ind_A = list(set(ind_Y + ind_mito))
-		with open("local/" + str(rep) + "/Sim_A_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
-			mutated_ts_A.write_vcf(vcf_file, contig_id = 'A', individuals = ind_A)
-
-		with open("local/" + str(rep) + "/Sim_X_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
-			mutated_ts_X.write_vcf(vcf_file, contig_id = 'X', individuals = ind_A)
-
-	os.chdir(path_source)
-	os.chdir(str(rep))
-	pedID_file = open("pedigreeID_father.txt", "r")
-	indM, indF, indX = get_ind(pedID_file)
-
-	###### Output VCF files ######
-	os.chdir(output)
-	for village in indM :
-		ind_Y = [ind.id for ind in indM[village]]
-		with open("local_father/" + str(rep) + "/Sim_Y_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
-			mutated_ts_Y.write_vcf(vcf_file, contig_id = 'Y', individuals = ind_Y)
-
-		ind_mito = [ind.id for ind in indF[village]]
-		if len(ind_mito) > 1:
-			with open("local_father/" + str(rep) + "/Sim_Mito_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
-				mutated_ts_mito.write_vcf(vcf_file, contig_id = 'Mito', individuals = ind_mito)
-
-		ind_A = list(set(ind_Y + ind_mito))
-		with open("local_father/" + str(rep) + "/Sim_A_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
-			mutated_ts_A.write_vcf(vcf_file, contig_id = 'A', individuals = ind_A)
-
-		with open("local_father/" + str(rep) + "/Sim_X_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
-			mutated_ts_X.write_vcf(vcf_file, contig_id = 'X', individuals = ind_A)
 
 	os.chdir(path_source)
 	os.chdir(str(rep))
@@ -245,24 +205,88 @@ for gen in generations :
 
 	os.chdir(path_source)
 	os.chdir(str(rep))
-	pedID_file = open("pedigreeID_village_father.txt", "r")
+	if descent == "patrilineal":
+		pedID_file = open("pedigreeID_village_father.txt", "r")
+		folder = "village_father/"
+	elif descent == "matrilineal":
+		pedID_file = open("pedigreeID_village_mother.txt", "r")
+		folder = "village_mother/"
 	indM, indF, indX = get_ind(pedID_file)
 
 	###### Output VCF files ######
 	os.chdir(output)
 	for village in indM :
 		ind_Y = [ind.id for ind in indM[village]]
-		with open("village_father/" + str(rep) + "/Sim_Y_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
+		with open(folder + str(rep) + "/Sim_Y_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
 			mutated_ts_Y.write_vcf(vcf_file, contig_id = 'Y', individuals = ind_Y)
 
 		ind_mito = [ind.id for ind in indF[village]]
-		with open("village_father/" + str(rep) + "/Sim_Mito_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
+		with open(folder + str(rep) + "/Sim_Mito_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
 			mutated_ts_mito.write_vcf(vcf_file, contig_id = 'Mito', individuals = ind_mito)
 
 		ind_A = list(set(ind_Y + ind_mito))
-		with open("village_father/" + str(rep) + "/Sim_A_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
+		with open(folder + str(rep) + "/Sim_A_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
 			mutated_ts_A.write_vcf(vcf_file, contig_id = 'A', individuals = ind_A)
 
 		indiv_X = [ind.id for ind in indX[village]]
-		with open("village_father/" + str(rep) + "/Sim_X_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
+		with open(folder + str(rep) + "/Sim_X_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
 			mutated_ts_X.write_vcf(vcf_file, contig_id = 'X', individuals = indiv_X)
+
+	os.chdir(path_source)
+	os.chdir(str(rep))
+	pedID_file = open("pedigreeID.txt", "r")
+	indM, indF, indX = get_ind(pedID_file)
+	print(indM)
+
+	###### Output VCF files ######
+	os.chdir(output)
+	for village in indM :
+		ind_Y = [ind.id for ind in indM[village]]
+		print(ind_Y)
+		with open("local/" + str(rep) + "/Sim_Y_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
+			mutated_ts_Y.write_vcf(vcf_file, contig_id = 'Y', individuals = ind_Y)
+
+		ind_mito = [ind.id for ind in indF[village]]
+		print(ind_mito)
+		if len(ind_mito) > 1:
+			with open("local/" + str(rep) + "/Sim_Mito_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
+				mutated_ts_mito.write_vcf(vcf_file, contig_id = 'Mito', individuals = ind_mito)
+
+		ind_A = list(set(ind_Y + ind_mito))
+		with open("local/" + str(rep) + "/Sim_A_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
+			mutated_ts_A.write_vcf(vcf_file, contig_id = 'A', individuals = ind_A)
+		
+		#indiv_X = [ind.id for ind in indX[village]]
+		with open("local/" + str(rep) + "/Sim_X_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
+			mutated_ts_X.write_vcf(vcf_file, contig_id = 'X', individuals = ind_A)
+
+	os.chdir(path_source)
+	os.chdir(str(rep))
+	if descent == "patrilineal":
+		pedID_file = open("pedigreeID_father.txt", "r")
+		folder = "local_father/"
+	elif descent == "matrilineal":
+		pedID_file = open("pedigreeID_mother.txt", "r")
+		folder = "local_mother/"
+	indM, indF, indX = get_ind(pedID_file)
+
+	###### Output VCF files ######
+	os.chdir(output)
+	for village in indM :
+		ind_Y = [ind.id for ind in indM[village]]
+		print(ind_Y)
+		with open(folder + str(rep) + "/Sim_Y_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
+			mutated_ts_Y.write_vcf(vcf_file, contig_id = 'Y', individuals = ind_Y)
+
+		ind_mito = [ind.id for ind in indF[village]]
+		if len(ind_mito) > 1:
+			with open(folder + str(rep) + "/Sim_Mito_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
+				mutated_ts_mito.write_vcf(vcf_file, contig_id = 'Mito', individuals = ind_mito)
+
+		ind_A = list(set(ind_Y + ind_mito))
+		with open(folder + str(rep) + "/Sim_A_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
+			mutated_ts_A.write_vcf(vcf_file, contig_id = 'A', individuals = ind_A)
+
+		#indiv_X = [ind.id for ind in indX[village]]
+		with open(folder + str(rep) + "/Sim_X_{0}_{1}_gen_{2}_village_{3}.vcf".format(mf, rep, gen, village), "w") as vcf_file:
+			mutated_ts_X.write_vcf(vcf_file, contig_id = 'X', individuals = ind_A)

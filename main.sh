@@ -21,7 +21,7 @@ nb_groups=3 # nb of descent groups -> does not make sense for bilateral descent 
 K=100 # carrying capacity per group
 polygyny="F" # "F" or "T"
 declare -i K_total=$nb_villages*$nb_groups*$K # total carrying capacity
-mf=0.1  # female migration rate
+mf=0.5  # female migration rate
 mm=0  # male migration rate
 sigma=0.1 # variance of the normal law used to draw growth rates
 growth_rate=0 # growth rate of villages and outgroup, if 0 : population has a constant size
@@ -39,11 +39,6 @@ if $random_fission; then
 else
     rf="F"
 fi
-if $violence; then
-	vl='T'
-else
-    vl="F"
-fi
 
 echo "Starting simulations"
 
@@ -60,9 +55,10 @@ else
 	mkdir -p $dir/Tables/metrics/$path/$nameDir
 	echo "'Replicat'    'Generation'    'N_ind'    'Nb_of_fissions'    'Nb_of_extinctions'    'Nb_of_groups'    'fathers'    'Nb_indiv_per_group'    'var_nb_ind_per_group'    'Nb_women_per_group'    'mothers'    'failed_couples'    'singleInd'	'Nb_children_per_couple'    'var_nb_children_per_couple'    'mean_group_depth'    'var_group_depth'    'mean_migrant_ratio'    'var_migrant_ratio' 'meanFissionTime' 'varFissionTime'" > $dir/Tables/metrics/$path/$nameDir/metrics.txt
 	echo "'Replicat'	'Generation'	'Group'	'nChildren'" > $dir/Tables/metrics/$path/$nameDir/nChildrenPerCouple.txt
-	echo "'Replicat'    'Generation'    'GroupDepth'" > $dir/Tables/metrics/$path/$nameDir/groupDepth.txt
-	echo "'Replicat'    'Generation'    'FissionTime'" > $dir/Tables/metrics/$path/$nameDir/fissionTime.txt
-	echo "'Replicat'	'Generation'	'Step'	'nMales'	'nInds'	'sexRatio'" > $dir/Tables/metrics/$path/$nameDir/sexRatio.txt
+	echo "'Replicat'    'Generation'    'GroupDepth'" > $dir/Tables/metrics/$path/$nameDir/groupDepth.txt  # output the depth (in generations) of growing descent groups at each generation for each replicate
+	echo "'Replicat'    'Generation'    'GroupDepth'" > $dir/Tables/metrics/$path/$nameDir/allGroupDepth.txt # output the depth (in generations) of all descent groups at each generation for each replicate
+	echo "'Replicat'    'Generation'    'FissionTime'" > $dir/Tables/metrics/$path/$nameDir/fissionTime.txt  # output the time between two fission events at each generation for each replicate
+	echo "'Replicat'	'Generation'	'Step'	'nMales'	'nInds'	'sexRatio'" > $dir/Tables/metrics/$path/$nameDir/sexRatio.txt  # output sex ratio at different step of the simulation at each generation for each replicate
 fi
 
 cd simulations/$path/$nameDir/
@@ -152,13 +148,20 @@ if [ "$descent" = "bilateral" ]; then
 	python ~/Documents/SLiM_model/Python_scripts/Pi_villages.py -s $dir/Simulations_folders/$path/$nameDir/local/ -c "1e6, 1e6, 1e6, 1e4" -ph $pseudohap -o $dir/Tables/Pi/$path/$DirTable/local/
 else
 	mkdir -p $dir/Tables/Pi/$path/$DirTable/village
-	mkdir -p $dir/Tables/Pi/$path/$DirTable/village_father
 	mkdir -p $dir/Tables/Pi/$path/$DirTable/local
-	mkdir -p $dir/Tables/Pi/$path/$DirTable/local_father
 	python ~/Documents/SLiM_model/Python_scripts/Pi_villages.py -s $dir/Simulations_folders/$path/$nameDir/village/ -c "1e6, 1e6, 1e6, 1e4" -ph $pseudohap -o $dir/Tables/Pi/$path/$DirTable/village/
-	python ~/Documents/SLiM_model/Python_scripts/Pi_villages.py -s $dir/Simulations_folders/$path/$nameDir/village_father/ -c "1e6, 1e6, 1e6, 1e4" -ph $pseudohap -o $dir/Tables/Pi/$path/$DirTable/village_father/
 	python ~/Documents/SLiM_model/Python_scripts/Pi_villages.py -s $dir/Simulations_folders/$path/$nameDir/local/ -c "1e6, 1e6, 1e6, 1e4" -ph $pseudohap -o $dir/Tables/Pi/$path/$DirTable/local/
-	python ~/Documents/SLiM_model/Python_scripts/Pi_villages.py -s $dir/Simulations_folders/$path/$nameDir/local_father/ -c "1e6, 1e6, 1e6, 1e4" -ph $pseudohap -o $dir/Tables/Pi/$path/$DirTable/local_father/
+	if [ "$descent" = "patrilineal" ]; then
+		mkdir -p $dir/Tables/Pi/$path/$DirTable/village_father
+		mkdir -p $dir/Tables/Pi/$path/$DirTable/local_father
+		python ~/Documents/SLiM_model/Python_scripts/Pi_villages.py -s $dir/Simulations_folders/$path/$nameDir/village_father/ -c "1e6, 1e6, 1e6, 1e4" -ph $pseudohap -o $dir/Tables/Pi/$path/$DirTable/village_father/
+		python ~/Documents/SLiM_model/Python_scripts/Pi_villages.py -s $dir/Simulations_folders/$path/$nameDir/local_father/ -c "1e6, 1e6, 1e6, 1e4" -ph $pseudohap -o $dir/Tables/Pi/$path/$DirTable/local_father/
+	elif [ "$descent" = "matrilineal" ]; then
+		mkdir -p $dir/Tables/Pi/$path/$DirTable/local_mother
+		mkdir -p $dir/Tables/Pi/$path/$DirTable/village_mother
+		python ~/Documents/SLiM_model/Python_scripts/Pi_villages.py -s $dir/Simulations_folders/$path/$nameDir/village_father/ -c "1e6, 1e6, 1e6, 1e4" -ph $pseudohap -o $dir/Tables/Pi/$path/$DirTable/village_mother/
+		python ~/Documents/SLiM_model/Python_scripts/Pi_villages.py -s $dir/Simulations_folders/$path/$nameDir/local_father/ -c "1e6, 1e6, 1e6, 1e4" -ph $pseudohap -o $dir/Tables/Pi/$path/$DirTable/local_mother/
+	fi
 fi
 
 ENDTIME=$(date +%s)
